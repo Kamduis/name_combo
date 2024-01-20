@@ -59,20 +59,23 @@ pub enum GrammaticalCase {
 
 /// The possible combination of names.
 pub enum NameCombo {
+	/// This represents the standard (german) name combination of first name and surname. Bsp.: "Penelope von Würzinger"
+	Name,
+
+	/// The full name. Bsp.: "Penelope Karin von Würzinger geb. Stauff"
+	Fullname,
+
 	/// The first forename. Bsp.: "Thomas"
 	Firstname,
 
 	/// All forenames. Bsp.: "Thomas Jakob"
 	Forenames,
 
-	/// The full name. Bsp.: "Penelope Karin von Würzinger geb. Stauff"
-	Fullname,
-
 	/// Only the full surname. This includes all name predicates. Bsp.: "von Würzinger"
 	Surname,
 
-	/// This represents the standard (german) name combination of first name and surname. Bsp.: "Penelope von Würzinger"
-	Name,
+	/// Only the title (academic title or something else). Bsp.: "Dr."
+	Title,
 }
 
 
@@ -88,12 +91,18 @@ pub struct Names {
 	predicate: Option<String>,
 	surname: String,
 	birthname: Option<String>,
+	title: Option<String>,
+	nickname: Option<String>,
+	supername: Option<String>,
 }
 
 impl Names {
-	/// Returns all fornames as a string. Bsp. "Thomas Jakob".
-	fn forenames( &self ) -> String {
-		self.forenames.join( " " )
+	/// Returns all fornames as a string. Bsp. "Thomas Jakob". If no forename is given, this returns `None`.
+	fn forenames( &self ) -> Option<String> {
+		if self.forenames.is_empty() {
+			return None;
+		}
+		Some( self.forenames.join( " " ) )
 	}
 
 	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
@@ -105,37 +114,30 @@ impl Names {
 	}
 
 	/// Returns a calling of a name.
-	pub fn name( &self, form: NameCombo, case: GrammaticalCase ) -> String {
-		let forenames = self.forenames();
-		let surname_full = self.surname_full();
-
+	pub fn designate( &self, form: NameCombo, case: GrammaticalCase ) -> Option<String> {
 		match form {
 			NameCombo::Name => {
-				let parts = [ self.forenames[0].as_str(), surname_full.as_str() ];
-				let text = parts.iter()
-					.map( |x| *x )
-					.collect::<Vec<&str>>()
-					.join( " " );
-				add_case_letter( &text, case )
+				if self.forenames.is_empty() {
+					return None
+				}
+				let res = add_case_letter( &format!( "{} {}", self.forenames[0], self.surname_full() ), case );
+				Some( res )
 			},
-			NameCombo::Surname => add_case_letter( &self.surname_full(), case ),
-			NameCombo::Firstname => add_case_letter( &self.forenames[0], case ),
-			NameCombo::Forenames => add_case_letter( &self.forenames(), case ),
+			NameCombo::Surname => Some( add_case_letter( &self.surname_full(), case ) ),
+			NameCombo::Firstname => self.forenames.first().map( |x| add_case_letter( x, case ) ),
+			NameCombo::Forenames => self.forenames().map( |x| add_case_letter( &x, case ) ),
 			NameCombo::Fullname => {
-				let parts = [
-					forenames.as_str(),
-					surname_full.as_str(),
-				];
-				let text = parts.iter()
-					.map( |x| *x )
-					.collect::<Vec<&str>>()
-					.join( " " );
-				let name = add_case_letter( &text, case );
-				match &self.birthname {
+				if self.forenames.is_empty() {
+					return None
+				}
+				let name = add_case_letter( &format!( "{} {}", self.forenames().unwrap(), self.surname_full() ), case );
+				let res = match &self.birthname {
 					Some( x ) => format!( "{} geb. {}", name, x ),
 					None => name,
-				}
+				};
+				Some( res )
 			},
+			NameCombo::Title => self.title.clone(),
 			_ => todo!(),
 		}
 	}
@@ -160,45 +162,51 @@ mod tests {
 			predicate: Some( "von".to_string() ),
 			surname: "Würzinger".to_string(),
 			birthname: None,
+			title: Some( "Dr.".to_string() ),
 			nickname: None,
 			supername: None,
 		};
 
 		assert_eq!(
-			name.name( NameCombo::Name, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Name, GrammaticalCase::Nominative ).unwrap(),
 			"Thomas von Würzinger".to_string()
 		);
 		assert_eq!(
-			name.name( NameCombo::Name, GrammaticalCase::Genetive ),
+			name.designate( NameCombo::Name, GrammaticalCase::Genetive ).unwrap(),
 			"Thomas von Würzingers".to_string()
 		);
 		assert_eq!(
-			name.name( NameCombo::Name, GrammaticalCase::Accusative ),
+			name.designate( NameCombo::Name, GrammaticalCase::Accusative ).unwrap(),
 			"Thomas von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Surname, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Surname, GrammaticalCase::Nominative ).unwrap(),
 			"von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Firstname, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Firstname, GrammaticalCase::Nominative ).unwrap(),
 			"Thomas".to_string()
 		);
 		assert_eq!(
-			name.name( NameCombo::Firstname, GrammaticalCase::Genetive ),
+			name.designate( NameCombo::Firstname, GrammaticalCase::Genetive ).unwrap(),
 			"Thomas'".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Forenames, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Forenames, GrammaticalCase::Nominative ).unwrap(),
 			"Thomas Jakob".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Fullname, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Fullname, GrammaticalCase::Nominative ).unwrap(),
 			"Thomas Jakob von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Title, GrammaticalCase::Nominative ).unwrap(),
+			"Dr.".to_string()
 		);
 	}
 
@@ -210,36 +218,42 @@ mod tests {
 			predicate: Some( "von".to_string() ),
 			surname: "Würzinger".to_string(),
 			birthname: Some( "Stauff".to_string() ),
+			title: None,
 			nickname: None,
 			supername: None,
 		};
 
 		assert_eq!(
-			name.name( NameCombo::Name, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Name, GrammaticalCase::Nominative ).unwrap(),
 			"Penelope von Würzinger".to_string()
 		);
 		assert_eq!(
-			name.name( NameCombo::Name, GrammaticalCase::Genetive ),
+			name.designate( NameCombo::Name, GrammaticalCase::Genetive ).unwrap(),
 			"Penelope von Würzingers".to_string()
 		);
 		assert_eq!(
-			name.name( NameCombo::Name, GrammaticalCase::Accusative ),
+			name.designate( NameCombo::Name, GrammaticalCase::Accusative ).unwrap(),
 			"Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Surname, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Surname, GrammaticalCase::Nominative ).unwrap(),
 			"von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Firstname, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Firstname, GrammaticalCase::Nominative ).unwrap(),
 			"Penelope".to_string()
 		);
 
 		assert_eq!(
-			name.name( NameCombo::Fullname, GrammaticalCase::Nominative ),
+			name.designate( NameCombo::Fullname, GrammaticalCase::Nominative ).unwrap(),
 			"Penelope Karin von Würzinger geb. Stauff".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Title, GrammaticalCase::Nominative ),
+			None
 		);
 	}
 }
