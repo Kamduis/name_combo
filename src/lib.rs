@@ -149,6 +149,27 @@ pub enum NameCombo {
 
 	/// Polite with title, first forename and surname. Bsp.: "Frau Dr. Penelope von Würzinger"
 	PoliteTitleName,
+
+	/// Bsp.: Hauptkommissar
+	Rank,
+
+	/// Bsp.: Herr Hauptkommissar
+	PoliteRank,
+
+	/// Bsp.: Hauptkommissar Thomas von Würzinger
+	RankName,
+
+	/// Bsp.: Hauptkommissar Thomas
+	RankFirstname,
+
+	/// Bsp.: Hauptkommissar von Würzinger
+	RankSurname,
+
+	/// Bsp.: Majorin Penelope Karin von Würzinger geb. Stauff
+	RankFullname,
+
+	/// Bsp.: Majorin Dr. Penelope von Würzinger
+	RankTitleName,
 }
 
 
@@ -165,6 +186,7 @@ pub struct Names {
 	surname: String,
 	birthname: Option<String>,
 	title: Option<String>,
+	rank: Option<String>,
 	nickname: Option<String>,
 	supername: Option<String>,
 	gender: Gender,
@@ -291,6 +313,61 @@ impl Names {
 				};
 				Some( format!( "{} {} {}", polite, title, name ) )
 			},
+			NameCombo::Rank => self.rank.clone(),
+			NameCombo::RankName => {
+				let Some( rank ) = self.rank.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Name, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", rank, name ) )
+			},
+			NameCombo::PoliteRank => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				let Some( rank ) = self.rank.clone() else {
+					return None;
+				};
+				Some( format!( "{} {}", polite, rank ) )
+			},
+			NameCombo::RankFirstname => {
+				let Some( rank ) = self.rank.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", rank, name ) )
+			},
+			NameCombo::RankSurname => {
+				let Some( rank ) = self.rank.clone() else {
+					return None;
+				};
+				Some( format!( "{} {}", rank, self.designate( NameCombo::Surname, case ).unwrap() ) )
+			},
+			NameCombo::RankFullname => {
+				let Some( rank ) = self.rank.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", rank, name ) )
+			},
+			NameCombo::RankTitleName => {
+				let Some( rank ) = self.rank.clone() else {
+					return None;
+				};
+				let Some( title ) = self.title.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Name, case ) else {
+					return None;
+				};
+				Some( format!( "{} {} {}", rank, title, name ) )
+			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
 				todo!();
@@ -335,6 +412,7 @@ mod tests {
 			surname: "Würzinger".to_string(),
 			birthname: None,
 			title: None,
+			rank: Some( "Hauptkommissar".to_string() ),
 			nickname: None,
 			supername: None,
 			gender: Gender::Male,
@@ -417,6 +495,7 @@ mod tests {
 			surname: "Würzinger".to_string(),
 			birthname: Some( "Stauff".to_string() ),
 			title: Some( "Dr.".to_string() ),
+			rank: Some( "Majorin".to_string() ),
 			nickname: None,
 			supername: None,
 			gender: Gender::Female,
@@ -503,6 +582,41 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::PoliteTitleName, GrammaticalCase::Nominative ).unwrap(),
 			"Frau Dr. Penelope von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Rank, GrammaticalCase::Nominative ).unwrap(),
+			"Majorin".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteRank, GrammaticalCase::Nominative ).unwrap(),
+			"Frau Majorin".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::RankName, GrammaticalCase::Nominative ).unwrap(),
+			"Majorin Penelope von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::RankFirstname, GrammaticalCase::Nominative ).unwrap(),
+			"Majorin Penelope".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::RankSurname, GrammaticalCase::Nominative ).unwrap(),
+			"Majorin von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::RankFullname, GrammaticalCase::Nominative ).unwrap(),
+			"Majorin Penelope Karin von Würzinger geb. Stauff".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::RankTitleName, GrammaticalCase::Nominative ).unwrap(),
+			"Majorin Dr. Penelope von Würzinger".to_string()
 		);
 	}
 }
