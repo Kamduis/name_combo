@@ -212,7 +212,20 @@ pub enum NameCombo {
 	/// Typical antique roman man's name: Bsp.: Gaius Julius Caeser (firstname surname [father's name] Cognomen).
 	TriaNomina,
 
+	/// The supername. Bsp.: Würzt-das-Essen
 	Supername,
+
+	/// Firstname and supername. Bsp.: Thomas Würzt-das-Essen
+	FirstSupername,
+
+	/// Name with supername between forename and surname. Bsp.: Thomas Würzt-das-Essen von Würzinger
+	SuperName,
+
+	/// Polite form of supername. Bsp.: Herr Würzt-das-Essen
+	PoliteSupername,
+
+	/// Supername with rank. Bsp.: Hauptkommissar Würzt-das-Essen
+	RankSupername,
 
 	/// Initials of firstname and surname. Bsp.: P. v. W.
 	Initials,
@@ -255,16 +268,26 @@ pub struct Names {
 }
 
 impl Names {
+	/// Returns all fornames.
+	pub fn forenames( &self ) -> &Vec<String> {
+		&self.forenames
+	}
+
 	/// Returns all fornames as a string. Bsp. "Thomas Jakob". If no forename is given, this returns `None`.
-	fn forenames( &self ) -> Option<String> {
+	fn forenames_string( &self ) -> Option<String> {
 		if self.forenames.is_empty() {
 			return None;
 		}
 		Some( self.forenames.join( " " ) )
 	}
 
+	/// Returns the first forname. If no forenames are given, this method returns `None`.
+	pub fn firstname( &self ) -> Option<&String> {
+		self.forenames.first()
+	}
+
 	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
-	fn surname_full( &self ) -> String {
+	pub fn surname_full( &self ) -> String {
 		match &self.predicate {
 			Some( x ) => format!( "{} {}", x, self.surname ),
 			None => self.surname.clone(),
@@ -282,13 +305,13 @@ impl Names {
 				Some( res )
 			},
 			NameCombo::Surname => Some( add_case_letter( &self.surname_full(), case ) ),
-			NameCombo::Firstname => self.forenames.first().map( |x| add_case_letter( x, case ) ),
-			NameCombo::Forenames => self.forenames().map( |x| add_case_letter( &x, case ) ),
+			NameCombo::Firstname => self.firstname().as_ref().map( |x| add_case_letter( x, case ) ),
+			NameCombo::Forenames => self.forenames_string().map( |x| add_case_letter( &x, case ) ),
 			NameCombo::Fullname => {
 				if self.forenames.is_empty() {
 					return None
 				}
-				let name = add_case_letter( &format!( "{} {}", self.forenames().unwrap(), self.surname_full() ), case );
+				let name = add_case_letter( &format!( "{} {}", self.forenames_string().unwrap(), self.surname_full() ), case );
 				let res = match &self.birthname {
 					Some( x ) => format!( "{} geb. {}", name, x ),
 					None => name,
@@ -490,15 +513,14 @@ impl Names {
 				Some( format!( "{} {} {}", name, article, honor ) )
 			},
 			NameCombo::OrderedName => {
-				let firstname = self.forenames.get( 0 ).cloned();
 				let names = vec![
-					&firstname,
-					&self.predicate,
+					self.firstname(),
+					self.predicate.as_ref(),
 				];
 				let res = format!( "{}, {}",
 					self.surname,
 					names.iter()
-						.filter_map( |&x| x.clone() )
+						.filter_map( |&x| x.cloned() )
 						.collect::<Vec<String>>()
 						.join( " " )
 				);
@@ -512,7 +534,7 @@ impl Names {
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::OrderedTitleName => {
-				let firstname = self.forenames.get( 0 ).cloned();
+				let firstname = self.firstname().map( |x| x.clone() );
 				let names = vec![
 					&self.title,
 					&firstname,
@@ -561,9 +583,43 @@ impl Names {
 				};
 				Some( name_initials )
 			},
-			_ => {
-				eprintln!( "\"{:?}\" not yet implemented.", form );
-				todo!();
+			NameCombo::Supername => self.supername.as_ref().map( |x| add_case_letter( x, case ) ),
+			NameCombo::FirstSupername => {
+				let Some( firstname ) = self.firstname() else {
+					return None;
+				};
+				let Some( supername ) = self.designate( NameCombo::Supername, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", firstname, supername ) )
+			},
+			NameCombo::SuperName => {
+				if self.forenames.is_empty() {
+					return None
+				}
+				let Some( supername ) = self.designate( NameCombo::Supername, case ) else {
+					return None;
+				};
+				let res = add_case_letter( &format!( "{} {} {}", self.forenames[0], supername, self.surname_full() ), case );
+				Some( res )
+			},
+			NameCombo::PoliteSupername => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Supername, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", polite, name ) )
+			},
+			NameCombo::RankSupername => {
+				let Some( ref rank ) = self.rank else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Supername, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", rank, name ) )
 			},
 		}
 	}
@@ -614,7 +670,7 @@ mod tests {
 			rank: Some( "Hauptkommissar".to_string() ),
 			nickname: Some( "Würzi".to_string() ),
 			honorname: Some( "Dunkle".to_string() ),
-			supername: None,
+			supername: Some( "Würzt-das-Essen".to_string() ),
 			gender: Gender::Male,
 		};
 
@@ -698,6 +754,31 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::NickSurname, GrammaticalCase::Nominative ).unwrap(),
 			"Würzi von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Supername, GrammaticalCase::Nominative ).unwrap(),
+			"Würzt-das-Essen".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::FirstSupername, GrammaticalCase::Nominative ).unwrap(),
+			"Thomas Würzt-das-Essen".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::SuperName, GrammaticalCase::Nominative ).unwrap(),
+			"Thomas Würzt-das-Essen von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteSupername, GrammaticalCase::Nominative ).unwrap(),
+			"Herr Würzt-das-Essen".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::RankSupername, GrammaticalCase::Nominative ).unwrap(),
+			"Hauptkommissar Würzt-das-Essen".to_string()
 		);
 	}
 
