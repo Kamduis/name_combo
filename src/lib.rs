@@ -198,6 +198,15 @@ pub enum NameCombo {
 	TriaNomina,
 
 	Supername,
+
+	/// Surname first to have a sensible way of alphabetically ordering names. Bsp.: Würzinger, Penelope von
+	OrderedName,
+
+	/// Like `Ordered`, only that the forenames are ignored. Bsp.: Würzinger, von
+	OrderedSurname,
+
+	/// Like `orderedName`, only with title added. Bsp.: Würzinger, Dr. Penelope von
+	OrderedTitleName,
 }
 
 
@@ -455,6 +464,44 @@ impl Names {
 					"der"
 				};
 				Some( format!( "{} {} {}", name, article, honor ) )
+			},
+			NameCombo::OrderedName => {
+				let firstname = self.forenames.get( 0 ).cloned();
+				let names = vec![
+					&firstname,
+					&self.predicate,
+				];
+				let res = format!( "{}, {}",
+					self.surname,
+					names.iter()
+						.filter_map( |&x| x.clone() )
+						.collect::<Vec<String>>()
+						.join( " " )
+				);
+				Some( add_case_letter( &res, case ) )
+			},
+			NameCombo::OrderedSurname => {
+				let res = match &self.predicate {
+					Some( x ) => format!( "{}, {}", self.surname, x ),
+					None => self.surname.clone(),
+				};
+				Some( add_case_letter( &res, case ) )
+			},
+			NameCombo::OrderedTitleName => {
+				let firstname = self.forenames.get( 0 ).cloned();
+				let names = vec![
+					&self.title,
+					&firstname,
+					&self.predicate,
+				];
+				let res = format!( "{}, {}",
+					self.surname,
+					names.iter()
+						.filter_map( |&x| x.clone() )
+						.collect::<Vec<String>>()
+						.join( " " )
+				);
+				Some( add_case_letter( &res, case ) )
 			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
@@ -737,6 +784,21 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::FirstHonorname, GrammaticalCase::Nominative ).unwrap(),
 			"Penelope die Große".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::OrderedName, GrammaticalCase::Nominative ).unwrap(),
+			"Würzinger, Penelope von".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::OrderedSurname, GrammaticalCase::Nominative ).unwrap(),
+			"Würzinger, von".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::OrderedTitleName, GrammaticalCase::Nominative ).unwrap(),
+			"Würzinger, Dr. Penelope von".to_string()
 		);
 	}
 
