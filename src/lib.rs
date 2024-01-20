@@ -274,6 +274,66 @@ impl Names {
 		Self::default()
 	}
 
+	/// Set the forenames.
+	pub fn with_forenames( mut self, names: &[&str] ) -> Self {
+		self.forenames = names.iter().map( |x| x.to_string() ).collect();
+		self
+	}
+
+	/// Set the predicate of a possible surname.
+	pub fn with_predicate( mut self, name: &str ) -> Self {
+		self.predicate = Some( name.to_string() );
+		self
+	}
+
+	/// Set the surname.
+	pub fn with_surname( mut self, name: &str ) -> Self {
+		self.surname = Some( name.to_string() );
+		self
+	}
+
+	/// Set the birthname.
+	pub fn with_birthname( mut self, name: &str ) -> Self {
+		self.birthname = Some( name.to_string() );
+		self
+	}
+
+	/// Set the title.
+	pub fn with_title( mut self, title: &str ) -> Self {
+		self.title = Some( title.to_string() );
+		self
+	}
+
+	/// Set the rank.
+	pub fn with_rank( mut self, rank: &str ) -> Self {
+		self.rank = Some( rank.to_string() );
+		self
+	}
+
+	/// Set the nickname.
+	pub fn with_nickname( mut self, name: &str ) -> Self {
+		self.nickname = Some( name.to_string() );
+		self
+	}
+
+	/// Set the honorname.
+	pub fn with_honorname( mut self, name: &str ) -> Self {
+		self.honorname = Some( name.to_string() );
+		self
+	}
+
+	/// Set the supername.
+	pub fn with_supername( mut self, name: &str ) -> Self {
+		self.supername = Some( name.to_string() );
+		self
+	}
+
+	/// Set the gender.
+	pub fn with_gender( mut self, gender: &Gender ) -> Self {
+		self.gender = Some( *gender );
+		self
+	}
+
 	/// Returns all fornames.
 	pub fn forenames( &self ) -> &Vec<String> {
 		&self.forenames
@@ -668,6 +728,66 @@ mod tests {
 	#[test]
 	fn create_names() {
 		assert_eq!( Names::new(), Names::default() );
+		assert_eq!( Names::new()
+			.with_forenames( &vec![ "Test1", "Test2" ] ), Names {
+				forenames: vec![ "Test1".to_string(), "Test2".to_string() ],
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_predicate( "Test" ), Names {
+				predicate: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_surname( "Test" ), Names {
+				surname: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_birthname( "Test" ), Names {
+				birthname: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_title( "Test" ), Names {
+				title: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_rank( "Test" ), Names {
+				rank: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_nickname( "Test" ), Names {
+				nickname: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_honorname( "Test" ), Names {
+				honorname: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_supername( "Test" ), Names {
+				supername: Some( "Test".to_string() ),
+				..Default::default()
+			}
+		);
+		assert_eq!( Names::new()
+			.with_gender( &Gender::Female ), Names {
+				gender: Some( Gender::Female ),
+				..Default::default()
+			}
+		);
 	}
 
 	#[test]
