@@ -254,6 +254,7 @@ pub enum NameCombo {
 
 
 /// The different names of a person that can be combined in various ways.
+#[derive( Clone, PartialEq, Eq, Default, Debug )]
 pub struct Names {
 	forenames: Vec<String>,
 	predicate: Option<String>,
@@ -264,10 +265,18 @@ pub struct Names {
 	nickname: Option<String>,
 	honorname: Option<String>,
 	supername: Option<String>,
-	gender: Gender,
+	gender: Option<Gender>,
 }
 
 impl Names {
+	/// Create a new `Names` with only the surname present.
+	pub fn new( surname: &str ) -> Self {
+		Self {
+			surname: surname.to_string(),
+			..Default::default()
+		}
+	}
+
 	/// Returns all fornames.
 	pub fn forenames( &self ) -> &Vec<String> {
 		&self.forenames
@@ -352,9 +361,9 @@ impl Names {
 				};
 				Some( format!( "{} {}", title, name ) )
 			},
-			NameCombo::Polite => self.gender.polite(),
+			NameCombo::Polite => self.gender?.polite(),
 			NameCombo::PoliteName => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				let Some( name ) = self.designate( NameCombo::Name, case ) else {
@@ -363,7 +372,7 @@ impl Names {
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteFirstname => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
@@ -372,13 +381,13 @@ impl Names {
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteSurname => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				Some( format!( "{} {}", polite, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::PoliteFullname => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
@@ -387,7 +396,7 @@ impl Names {
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteTitleName => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				let Some( title ) = self.title.clone() else {
@@ -409,7 +418,7 @@ impl Names {
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::PoliteRank => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				let Some( rank ) = self.rank.clone() else {
@@ -491,12 +500,13 @@ impl Names {
 				let Some( honor ) = self.designate( NameCombo::Honor, case ) else {
 					return None;
 				};
-				let article = if self.gender == Gender::Female {
-					"Die"
-				} else {
-					"Der"
+				let res = match self.gender {
+					Some( Gender::Female ) => format!( "Die {}", honor ),
+					Some( Gender::Male ) => format!( "Der {}", honor ),
+					Some( Gender::Neutral ) => format!( "Das {}", honor ),
+					_ => honor.to_string(),
 				};
-				Some( format!( "{} {}", article, honor ) )
+				Some( res )
 			},
 			NameCombo::FirstHonorname => {
 				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
@@ -505,12 +515,13 @@ impl Names {
 				let Some( honor ) = self.designate( NameCombo::Honor, case ) else {
 					return None;
 				};
-				let article = if self.gender == Gender::Female {
-					"die"
-				} else {
-					"der"
+				let res = match self.gender {
+					Some( Gender::Female ) => format!( "{} die {}", name, honor ),
+					Some( Gender::Male ) => format!( "{} der {}", name, honor ),
+					Some( Gender::Neutral ) => format!( "{} das {}", name, honor ),
+					_ => format!( "{} {}", name, honor ),
 				};
-				Some( format!( "{} {} {}", name, article, honor ) )
+				Some( res )
 			},
 			NameCombo::OrderedName => {
 				let names = vec![
@@ -604,7 +615,7 @@ impl Names {
 				Some( res )
 			},
 			NameCombo::PoliteSupername => {
-				let Some( polite ) = self.gender.polite() else {
+				let Some( polite ) = self.gender?.polite() else {
 					return None;
 				};
 				let Some( name ) = self.designate( NameCombo::Supername, case ) else {
@@ -654,8 +665,16 @@ mod tests {
 
 	#[test]
 	fn test_initials() {
-		assert_eq!( initials( "Test Test"), "T. T.".to_string() );
-		assert_eq!( initials( "Thomas von Würzinger"), "T. v. W.".to_string() );
+		assert_eq!( initials( "Test Test" ), "T. T.".to_string() );
+		assert_eq!( initials( "Thomas von Würzinger" ), "T. v. W.".to_string() );
+	}
+
+	#[test]
+	fn create_names() {
+		assert_eq!( Names::new( "Test" ), Names {
+			surname: "Test".to_string(),
+			..Default::default()
+		} );
 	}
 
 	#[test]
@@ -671,7 +690,7 @@ mod tests {
 			nickname: Some( "Würzi".to_string() ),
 			honorname: Some( "Dunkle".to_string() ),
 			supername: Some( "Würzt-das-Essen".to_string() ),
-			gender: Gender::Male,
+			gender: Some( Gender::Male ),
 		};
 
 		assert_eq!(
@@ -795,7 +814,7 @@ mod tests {
 			nickname: None,
 			honorname: Some( "Große".to_string() ),
 			supername: None,
-			gender: Gender::Female,
+			gender: Some( Gender::Female ),
 		};
 
 		assert_eq!(
@@ -975,7 +994,7 @@ mod tests {
 			nickname: Some( "Caesar".to_string() ),
 			honorname: None,
 			supername: None,
-			gender: Gender::Male,
+			gender: None,
 		};
 
 		assert_eq!(
@@ -997,7 +1016,7 @@ mod tests {
 			nickname: Some( "Prima".to_string() ),
 			honorname: None,
 			supername: None,
-			gender: Gender::Female,
+			gender: None,
 		};
 
 		assert_eq!(
