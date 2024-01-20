@@ -117,7 +117,7 @@ impl fmt::Display for Gender {
 
 
 /// The possible combination of names.
-#[derive( Debug )]
+#[derive( Clone, Copy, PartialEq, Eq, Debug )]
 pub enum NameCombo {
 	/// This represents the standard (german) name combination of first name and surname. Bsp.: "Penelope von Würzinger"
 	Name,
