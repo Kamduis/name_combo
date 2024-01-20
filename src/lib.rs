@@ -58,6 +58,7 @@ pub enum GrammaticalCase {
 
 
 /// The possible combination of names.
+#[derive( Debug )]
 pub enum NameCombo {
 	/// This represents the standard (german) name combination of first name and surname. Bsp.: "Penelope von Würzinger"
 	Name,
@@ -76,6 +77,18 @@ pub enum NameCombo {
 
 	/// Only the title (academic title or something else). Bsp.: "Dr."
 	Title,
+
+	/// Title with first forename and surname. Bsp.: "Dr. Penelope von Würzinger"
+	TitleName,
+
+	/// Title with first forename. Bsp.: "Dr. Penelope"
+	TitleFirstname,
+
+	/// Title with surname. Bsp.: "Dr. von Würzinger"
+	TitleSurname,
+
+	/// Title with full name. Bsp.: "Dr. Penelope Karin von Würzinger geb. Stauff"
+	TitleFullname,
 }
 
 
@@ -138,7 +151,43 @@ impl Names {
 				Some( res )
 			},
 			NameCombo::Title => self.title.clone(),
-			_ => todo!(),
+			NameCombo::TitleName => {
+				let Some( title ) = self.title.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Name, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", title, name ) )
+			},
+			NameCombo::TitleFirstname => {
+				let Some( title ) = self.title.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", title, name ) )
+			},
+			NameCombo::TitleSurname => {
+				let Some( title ) = self.title.clone() else {
+					return None;
+				};
+				Some( format!( "{} {}", title, self.designate( NameCombo::Surname, case ).unwrap() ) )
+			},
+			NameCombo::TitleFullname => {
+				let Some( title ) = self.title.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", title, name ) )
+			},
+			_ => {
+				eprintln!( "\"{:?}\" not yet implemented.", form );
+				todo!();
+			},
 		}
 	}
 }
@@ -162,7 +211,7 @@ mod tests {
 			predicate: Some( "von".to_string() ),
 			surname: "Würzinger".to_string(),
 			birthname: None,
-			title: Some( "Dr.".to_string() ),
+			title: None,
 			nickname: None,
 			supername: None,
 		};
@@ -205,8 +254,8 @@ mod tests {
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Title, GrammaticalCase::Nominative ).unwrap(),
-			"Dr.".to_string()
+			name.designate( NameCombo::Title, GrammaticalCase::Nominative ),
+			None
 		);
 	}
 
@@ -218,7 +267,7 @@ mod tests {
 			predicate: Some( "von".to_string() ),
 			surname: "Würzinger".to_string(),
 			birthname: Some( "Stauff".to_string() ),
-			title: None,
+			title: Some( "Dr.".to_string() ),
 			nickname: None,
 			supername: None,
 		};
@@ -252,8 +301,28 @@ mod tests {
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Title, GrammaticalCase::Nominative ),
-			None
+			name.designate( NameCombo::Title, GrammaticalCase::Nominative ).unwrap(),
+			"Dr.".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::TitleName, GrammaticalCase::Nominative ).unwrap(),
+			"Dr. Penelope von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::TitleFirstname, GrammaticalCase::Nominative ).unwrap(),
+			"Dr. Penelope".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::TitleSurname, GrammaticalCase::Nominative ).unwrap(),
+			"Dr. von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::TitleFullname, GrammaticalCase::Nominative ).unwrap(),
+			"Dr. Penelope Karin von Würzinger geb. Stauff".to_string()
 		);
 	}
 }
