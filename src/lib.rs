@@ -258,7 +258,7 @@ pub enum NameCombo {
 pub struct Names {
 	forenames: Vec<String>,
 	predicate: Option<String>,
-	surname: String,
+	surname: Option<String>,
 	birthname: Option<String>,
 	title: Option<String>,
 	rank: Option<String>,
@@ -269,12 +269,9 @@ pub struct Names {
 }
 
 impl Names {
-	/// Create a new `Names` with only the surname present.
-	pub fn new( surname: &str ) -> Self {
-		Self {
-			surname: surname.to_string(),
-			..Default::default()
-		}
+	/// Create a new `Names`. No name is actually being set.
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	/// Returns all fornames.
@@ -296,11 +293,13 @@ impl Names {
 	}
 
 	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
-	pub fn surname_full( &self ) -> String {
-		match &self.predicate {
-			Some( x ) => format!( "{} {}", x, self.surname ),
-			None => self.surname.clone(),
-		}
+	pub fn surname_full( &self ) -> Option<String> {
+		let res = match &self.predicate {
+			Some( x ) => format!( "{} {}", x, &self.surname.clone()? ),
+			None => self.surname.clone()?,
+		};
+
+		Some( res )
 	}
 
 	/// Returns a calling of a name.
@@ -310,17 +309,17 @@ impl Names {
 				if self.forenames.is_empty() {
 					return None
 				}
-				let res = add_case_letter( &format!( "{} {}", self.forenames[0], self.surname_full() ), case );
+				let res = add_case_letter( &format!( "{} {}", self.forenames[0], self.surname_full()? ), case );
 				Some( res )
 			},
-			NameCombo::Surname => Some( add_case_letter( &self.surname_full(), case ) ),
+			NameCombo::Surname => Some( add_case_letter( &self.surname_full()?, case ) ),
 			NameCombo::Firstname => self.firstname().as_ref().map( |x| add_case_letter( x, case ) ),
 			NameCombo::Forenames => self.forenames_string().map( |x| add_case_letter( &x, case ) ),
 			NameCombo::Fullname => {
 				if self.forenames.is_empty() {
 					return None
 				}
-				let name = add_case_letter( &format!( "{} {}", self.forenames_string().unwrap(), self.surname_full() ), case );
+				let name = add_case_letter( &format!( "{} {}", self.forenames_string().unwrap(), self.surname_full()? ), case );
 				let res = match &self.birthname {
 					Some( x ) => format!( "{} geb. {}", name, x ),
 					None => name,
@@ -482,7 +481,7 @@ impl Names {
 				let Some( nick ) = self.nickname.clone() else {
 					return None;
 				};
-				let res = add_case_letter( &format!( "{} {}", self.surname, nick ), case );
+				let res = add_case_letter( &format!( "{} {}", self.surname.clone()?, nick ), case );
 				Some( res )
 			},
 			NameCombo::TriaNomina => {
@@ -492,7 +491,7 @@ impl Names {
 				let Some( nick ) = self.nickname.clone() else {
 					return None;
 				};
-				let res = add_case_letter( &format!( "{} {} {}", name, self.surname, nick ), case );
+				let res = add_case_letter( &format!( "{} {} {}", name, self.surname.clone()?, nick ), case );
 				Some( res )
 			},
 			NameCombo::Honor => self.honorname.as_ref().map( |x| add_case_letter( x, case ) ),
@@ -529,7 +528,7 @@ impl Names {
 					self.predicate.as_ref(),
 				];
 				let res = format!( "{}, {}",
-					self.surname,
+					self.surname.clone()?,
 					names.iter()
 						.filter_map( |&x| x.cloned() )
 						.collect::<Vec<String>>()
@@ -539,8 +538,8 @@ impl Names {
 			},
 			NameCombo::OrderedSurname => {
 				let res = match &self.predicate {
-					Some( x ) => format!( "{}, {}", self.surname, x ),
-					None => self.surname.clone(),
+					Some( x ) => format!( "{}, {}", self.surname.clone()?, x ),
+					None => self.surname.clone()?,
 				};
 				Some( add_case_letter( &res, case ) )
 			},
@@ -552,7 +551,7 @@ impl Names {
 					&self.predicate,
 				];
 				let res = format!( "{}, {}",
-					self.surname,
+					self.surname.clone()?,
 					names.iter()
 						.filter_map( |&x| x.clone() )
 						.collect::<Vec<String>>()
@@ -570,10 +569,7 @@ impl Names {
 				let Some( forenames ) = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative ) else {
 					return None;
 				};
-				let Some( surname ) = self.designate( NameCombo::Surname, GrammaticalCase::Nominative ) else {
-					return None;
-				};
-				let mut name_initials = initials( &format!( "{} {}", forenames, surname ) );
+				let mut name_initials = initials( &format!( "{} {}", forenames, self.surname_full()? ) );
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
 				};
@@ -588,7 +584,7 @@ impl Names {
 					None => forenames,
 				};
 				let mut name_initials = initials( &name );
-				name_initials.push_str( &format!( " {}", self.surname ) );
+				name_initials.push_str( &format!( " {}", self.surname.clone()? ) );
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
 				};
@@ -611,7 +607,7 @@ impl Names {
 				let Some( supername ) = self.designate( NameCombo::Supername, case ) else {
 					return None;
 				};
-				let res = add_case_letter( &format!( "{} {} {}", self.forenames[0], supername, self.surname_full() ), case );
+				let res = add_case_letter( &format!( "{} {} {}", self.forenames[0], supername, self.surname_full()? ), case );
 				Some( res )
 			},
 			NameCombo::PoliteSupername => {
@@ -671,10 +667,7 @@ mod tests {
 
 	#[test]
 	fn create_names() {
-		assert_eq!( Names::new( "Test" ), Names {
-			surname: "Test".to_string(),
-			..Default::default()
-		} );
+		assert_eq!( Names::new(), Names::default() );
 	}
 
 	#[test]
@@ -683,7 +676,7 @@ mod tests {
 		let name = Names {
 			forenames: [ "Thomas", "Jakob" ].iter().map( |x| x.to_string() ).collect(),
 			predicate: Some( "von".to_string() ),
-			surname: "Würzinger".to_string(),
+			surname: Some( "Würzinger".to_string() ),
 			birthname: None,
 			title: None,
 			rank: Some( "Hauptkommissar".to_string() ),
@@ -807,7 +800,7 @@ mod tests {
 		let name = Names {
 			forenames: [ "Penelope", "Karin" ].iter().map( |x| x.to_string() ).collect(),
 			predicate: Some( "von".to_string() ),
-			surname: "Würzinger".to_string(),
+			surname: Some( "Würzinger".to_string() ),
 			birthname: Some( "Stauff".to_string() ),
 			title: Some( "Dr.".to_string() ),
 			rank: Some( "Majorin".to_string() ),
@@ -987,7 +980,7 @@ mod tests {
 		let name = Names {
 			forenames: vec![ "Gaius".to_string() ],
 			predicate: None,
-			surname: "Julius".to_string(),
+			surname: Some( "Julius".to_string() ),
 			birthname: None,
 			title: None,
 			rank: None,
@@ -1009,7 +1002,7 @@ mod tests {
 		let name = Names {
 			forenames: Vec::new(),
 			predicate: None,
-			surname: "Iunia".to_string(),
+			surname: Some( "Iunia".to_string() ),
 			birthname: None,
 			title: None,
 			rank: None,
