@@ -68,7 +68,7 @@ pub enum GrammaticalCase {
 
 
 /// A subset of possible genders.
-#[derive( Clone, Copy, Debug )]
+#[derive( Clone, Copy, PartialEq, Eq, Debug )]
 pub enum Gender {
 	Male,
 	Female,
@@ -182,6 +182,15 @@ pub enum NameCombo {
 	/// Bsp.: Würzi von Würzinger
 	NickSurname,
 
+	/// Only the honorific name. Bsp.: "Starke", "Große", "Dunkle"
+	Honor,
+
+	/// Honorific name with article. Bsp.: "Der Starke", "Die Große"
+	Honortitle,
+
+	/// Honor with first forename. Bsp.: "Penelope die Große"
+	FirstHonorname,
+
 	/// Typical antique roman woman's name: Bsp.: Iunia Prima (feminized surname [father's name] Cognomen).
 	DuaNomina,
 
@@ -207,6 +216,7 @@ pub struct Names {
 	title: Option<String>,
 	rank: Option<String>,
 	nickname: Option<String>,
+	honorname: Option<String>,
 	supername: Option<String>,
 	gender: Gender,
 }
@@ -420,6 +430,32 @@ impl Names {
 				let res = add_case_letter( &format!( "{} {} {}", name, self.surname, nick ), case );
 				Some( res )
 			},
+			NameCombo::Honor => self.honorname.as_ref().map( |x| add_case_letter( x, case ) ),
+			NameCombo::Honortitle => {
+				let Some( honor ) = self.designate( NameCombo::Honor, case ) else {
+					return None;
+				};
+				let article = if self.gender == Gender::Female {
+					"Die"
+				} else {
+					"Der"
+				};
+				Some( format!( "{} {}", article, honor ) )
+			},
+			NameCombo::FirstHonorname => {
+				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
+					return None;
+				};
+				let Some( honor ) = self.designate( NameCombo::Honor, case ) else {
+					return None;
+				};
+				let article = if self.gender == Gender::Female {
+					"die"
+				} else {
+					"der"
+				};
+				Some( format!( "{} {} {}", name, article, honor ) )
+			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
 				todo!();
@@ -466,6 +502,7 @@ mod tests {
 			title: None,
 			rank: Some( "Hauptkommissar".to_string() ),
 			nickname: Some( "Würzi".to_string() ),
+			honorname: Some( "Dunkle".to_string() ),
 			supername: None,
 			gender: Gender::Male,
 		};
@@ -564,6 +601,7 @@ mod tests {
 			title: Some( "Dr.".to_string() ),
 			rank: Some( "Majorin".to_string() ),
 			nickname: None,
+			honorname: Some( "Große".to_string() ),
 			supername: None,
 			gender: Gender::Female,
 		};
@@ -685,6 +723,21 @@ mod tests {
 			name.designate( NameCombo::RankTitleName, GrammaticalCase::Nominative ).unwrap(),
 			"Majorin Dr. Penelope von Würzinger".to_string()
 		);
+
+		assert_eq!(
+			name.designate( NameCombo::Honor, GrammaticalCase::Nominative ).unwrap(),
+			"Große".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Honortitle, GrammaticalCase::Nominative ).unwrap(),
+			"Die Große".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::FirstHonorname, GrammaticalCase::Nominative ).unwrap(),
+			"Penelope die Große".to_string()
+		);
 	}
 
 	#[test]
@@ -698,6 +751,7 @@ mod tests {
 			title: None,
 			rank: None,
 			nickname: Some( "Caesar".to_string() ),
+			honorname: None,
 			supername: None,
 			gender: Gender::Male,
 		};
@@ -719,6 +773,7 @@ mod tests {
 			title: None,
 			rank: None,
 			nickname: Some( "Prima".to_string() ),
+			honorname: None,
 			supername: None,
 			gender: Gender::Female,
 		};
