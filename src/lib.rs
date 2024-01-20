@@ -18,6 +18,21 @@ use std::fmt;
 // Helper functions
 
 
+/// Creating initials from `text` by only taking the first letter of each word and adding a dot after it.
+///
+/// Bsp. "Thomas von Würzinger" => "T. v. W."
+fn initials( text: &str ) -> String {
+	if text.is_empty() {
+		return "".to_string();
+	}
+
+	text.split( " " )
+		.map( |x| format!( "{}.", x.chars().next().unwrap() ) )
+		.collect::<Vec<String>>()
+		.join( " " )
+}
+
+
 /// Adding letters to `text` depending on the grammatical case. `text` is assumed to be of the Nominative case.
 ///
 /// Bsp. Günther
@@ -198,6 +213,15 @@ pub enum NameCombo {
 	TriaNomina,
 
 	Supername,
+
+	/// Initials of firstname and surname. Bsp.: P. v. W.
+	Initials,
+
+	/// Initials of all forenames with title and surname. Bsp.: Dr. P. K. v. W.
+	InitialsFull,
+
+	/// Surname with initials of forenames (e.g. for nameplates). Bsp.: Dr. P. K. v. Würzinger
+	Sign,
 
 	/// Surname first to have a sensible way of alphabetically ordering names. Bsp.: Würzinger, Penelope von
 	OrderedName,
@@ -503,6 +527,40 @@ impl Names {
 				);
 				Some( add_case_letter( &res, case ) )
 			},
+			NameCombo::Initials => {
+				let Some( name ) = self.designate( NameCombo::Name, GrammaticalCase::Nominative ) else {
+					return None;
+				};
+				Some( initials( &name ) )
+			},
+			NameCombo::InitialsFull => {
+				let Some( forenames ) = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative ) else {
+					return None;
+				};
+				let Some( surname ) = self.designate( NameCombo::Surname, GrammaticalCase::Nominative ) else {
+					return None;
+				};
+				let mut name_initials = initials( &format!( "{} {}", forenames, surname ) );
+				if let Some( title ) = &self.title {
+					name_initials.insert_str( 0, &format!( "{} ", title ) );
+				};
+				Some( name_initials )
+			},
+			NameCombo::Sign => {
+				let Some( forenames ) = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative ) else {
+					return None;
+				};
+				let name = match &self.predicate {
+					Some( x ) => format!( "{} {}", forenames, x ),
+					None => forenames,
+				};
+				let mut name_initials = initials( &name );
+				name_initials.push_str( &format!( " {}", self.surname ) );
+				if let Some( title ) = &self.title {
+					name_initials.insert_str( 0, &format!( "{} ", title ) );
+				};
+				Some( name_initials )
+			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
 				todo!();
@@ -536,6 +594,12 @@ mod tests {
 		assert_eq!( Gender::Female.to_string(), "♀".to_string() );
 		assert_eq!( Gender::Neutral.to_string(), "⚪".to_string() );
 		assert_eq!( Gender::Other.to_string(), "⚧".to_string() );
+	}
+
+	#[test]
+	fn test_initials() {
+		assert_eq!( initials( "Test Test"), "T. T.".to_string() );
+		assert_eq!( initials( "Thomas von Würzinger"), "T. v. W.".to_string() );
 	}
 
 	#[test]
@@ -799,6 +863,21 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::OrderedTitleName, GrammaticalCase::Nominative ).unwrap(),
 			"Würzinger, Dr. Penelope von".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Initials, GrammaticalCase::Nominative ).unwrap(),
+			"P. v. W.".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::InitialsFull, GrammaticalCase::Nominative ).unwrap(),
+			"Dr. P. K. v. W.".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Sign, GrammaticalCase::Nominative ).unwrap(),
+			"Dr. P. K. v. Würzinger".to_string()
 		);
 	}
 
