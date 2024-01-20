@@ -6,6 +6,15 @@
 
 
 //=============================================================================
+// Crates
+
+
+use std::fmt;
+
+
+
+
+//=============================================================================
 // Helper functions
 
 
@@ -57,6 +66,39 @@ pub enum GrammaticalCase {
 }
 
 
+/// A subset of possible genders.
+pub enum Gender {
+	Male,
+	Female,
+	Neutral,
+	Other,
+}
+
+impl Gender {
+	/// Returns the german polite adress for a person of the respective gender.
+	fn polite( &self ) -> Option<String> {
+		match self {
+			Self::Male    => Some( "Herr".to_string() ),
+			Self::Female  => Some( "Frau".to_string() ),
+			Self::Neutral | Self::Other => None,
+		}
+	}
+}
+
+impl fmt::Display for Gender {
+	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
+		let res = match self {
+			Self::Male    => "♂",
+			Self::Female  => "♀",
+			Self::Neutral => "⚪",
+			Self::Other   => "⚧",
+		};
+
+		write!( f, "{}", res )
+	}
+}
+
+
 /// The possible combination of names.
 #[derive( Debug )]
 pub enum NameCombo {
@@ -89,6 +131,24 @@ pub enum NameCombo {
 
 	/// Title with full name. Bsp.: "Dr. Penelope Karin von Würzinger geb. Stauff"
 	TitleFullname,
+
+	/// Only the polite address. Bsp.: "Herr"
+	Polite,
+
+	/// Polite with first forename and surname. Bsp.: "Herr Thomas von Würzinger"
+	PoliteName,
+
+	/// Polite with first forename. Bsp.: "Frau Penelope"
+	PoliteFirstname,
+
+	/// Polite with surname. Bsp.: "Herr von Würzinger"
+	PoliteSurname,
+
+	/// Polite with full name. Bsp.: "Frau Penelope Karin von Würzinger geb. Stauff"
+	PoliteFullname,
+
+	/// Polite with title, first forename and surname. Bsp.: "Frau Dr. Penelope von Würzinger"
+	PoliteTitleName,
 }
 
 
@@ -107,6 +167,7 @@ pub struct Names {
 	title: Option<String>,
 	nickname: Option<String>,
 	supername: Option<String>,
+	gender: Gender,
 }
 
 impl Names {
@@ -184,6 +245,52 @@ impl Names {
 				};
 				Some( format!( "{} {}", title, name ) )
 			},
+			NameCombo::Polite => self.gender.polite(),
+			NameCombo::PoliteName => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Name, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", polite, name ) )
+			},
+			NameCombo::PoliteFirstname => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", polite, name ) )
+			},
+			NameCombo::PoliteSurname => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				Some( format!( "{} {}", polite, self.designate( NameCombo::Surname, case ).unwrap() ) )
+			},
+			NameCombo::PoliteFullname => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
+					return None;
+				};
+				Some( format!( "{} {}", polite, name ) )
+			},
+			NameCombo::PoliteTitleName => {
+				let Some( polite ) = self.gender.polite() else {
+					return None;
+				};
+				let Some( title ) = self.title.clone() else {
+					return None;
+				};
+				let Some( name ) = self.designate( NameCombo::Name, case ) else {
+					return None;
+				};
+				Some( format!( "{} {} {}", polite, title, name ) )
+			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
 				todo!();
@@ -204,6 +311,22 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn gender_title() {
+		assert_eq!( Gender::Male.polite().unwrap(), "Herr".to_string() );
+		assert_eq!( Gender::Female.polite().unwrap(), "Frau".to_string() );
+		assert!( Gender::Neutral.polite().is_none() );
+		assert!( Gender::Other.polite().is_none() );
+	}
+
+	#[test]
+	fn gender_symbol() {
+		assert_eq!( Gender::Male.to_string(), "♂".to_string() );
+		assert_eq!( Gender::Female.to_string(), "♀".to_string() );
+		assert_eq!( Gender::Neutral.to_string(), "⚪".to_string() );
+		assert_eq!( Gender::Other.to_string(), "⚧".to_string() );
+	}
+
+	#[test]
 	fn name_strings_male() {
 		// Thomas Jakob von Würzinger
 		let name = Names {
@@ -214,6 +337,7 @@ mod tests {
 			title: None,
 			nickname: None,
 			supername: None,
+			gender: Gender::Male,
 		};
 
 		assert_eq!(
@@ -257,6 +381,31 @@ mod tests {
 			name.designate( NameCombo::Title, GrammaticalCase::Nominative ),
 			None
 		);
+
+		assert_eq!(
+			name.designate( NameCombo::Polite, GrammaticalCase::Nominative ).unwrap(),
+			"Herr".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteName, GrammaticalCase::Nominative ).unwrap(),
+			"Herr Thomas von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteFirstname, GrammaticalCase::Nominative ).unwrap(),
+			"Herr Thomas".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteSurname, GrammaticalCase::Nominative ).unwrap(),
+			"Herr von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative ).unwrap(),
+			"Herr Thomas Jakob von Würzinger".to_string()
+		);
 	}
 
 	#[test]
@@ -270,6 +419,7 @@ mod tests {
 			title: Some( "Dr.".to_string() ),
 			nickname: None,
 			supername: None,
+			gender: Gender::Female,
 		};
 
 		assert_eq!(
@@ -323,6 +473,36 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::TitleFullname, GrammaticalCase::Nominative ).unwrap(),
 			"Dr. Penelope Karin von Würzinger geb. Stauff".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Polite, GrammaticalCase::Nominative ).unwrap(),
+			"Frau".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteName, GrammaticalCase::Nominative ).unwrap(),
+			"Frau Penelope von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteFirstname, GrammaticalCase::Nominative ).unwrap(),
+			"Frau Penelope".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteSurname, GrammaticalCase::Nominative ).unwrap(),
+			"Frau von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative ).unwrap(),
+			"Frau Penelope Karin von Würzinger geb. Stauff".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::PoliteTitleName, GrammaticalCase::Nominative ).unwrap(),
+			"Frau Dr. Penelope von Würzinger".to_string()
 		);
 	}
 }
