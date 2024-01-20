@@ -170,6 +170,17 @@ pub enum NameCombo {
 
 	/// Bsp.: Majorin Dr. Penelope von Würzinger
 	RankTitleName,
+
+	/// Bsp.: Würzi
+	Nickname,
+
+	/// Bsp.: Thomas Würzi
+	FirstNickname,
+
+	/// Bsp.: Würzi von Würzinger
+	NickSurname,
+
+	Supername,
 }
 
 
@@ -368,6 +379,22 @@ impl Names {
 				};
 				Some( format!( "{} {} {}", rank, title, name ) )
 			},
+			NameCombo::Nickname => self.nickname.clone(),
+			NameCombo::FirstNickname => {
+				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
+					return None;
+				};
+				let Some( nick ) = self.nickname.clone() else {
+					return None;
+				};
+				Some( format!( "{} {}", name, nick ) )
+			},
+			NameCombo::NickSurname => {
+				let Some( nick ) = self.nickname.clone() else {
+					return None;
+				};
+				Some( format!( "{} {}", nick, self.designate( NameCombo::Surname, case ).unwrap() ) )
+			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
 				todo!();
@@ -413,7 +440,7 @@ mod tests {
 			birthname: None,
 			title: None,
 			rank: Some( "Hauptkommissar".to_string() ),
-			nickname: None,
+			nickname: Some( "Würzi".to_string() ),
 			supername: None,
 			gender: Gender::Male,
 		};
@@ -483,6 +510,21 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative ).unwrap(),
 			"Herr Thomas Jakob von Würzinger".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::Nickname, GrammaticalCase::Nominative ).unwrap(),
+			"Würzi".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::FirstNickname, GrammaticalCase::Nominative ).unwrap(),
+			"Thomas Würzi".to_string()
+		);
+
+		assert_eq!(
+			name.designate( NameCombo::NickSurname, GrammaticalCase::Nominative ).unwrap(),
+			"Würzi von Würzinger".to_string()
 		);
 	}
 
