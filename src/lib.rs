@@ -58,6 +58,7 @@ fn add_case_letter( text: &str, case: GrammaticalCase ) -> String {
 
 
 /// The different grammatical cases.
+#[derive( Clone, Copy, Debug )]
 pub enum GrammaticalCase {
 	Nominative,
 	Genetive,
@@ -67,6 +68,7 @@ pub enum GrammaticalCase {
 
 
 /// A subset of possible genders.
+#[derive( Clone, Copy, Debug )]
 pub enum Gender {
 	Male,
 	Female,
@@ -179,6 +181,12 @@ pub enum NameCombo {
 
 	/// Bsp.: Würzi von Würzinger
 	NickSurname,
+
+	/// Typical antique roman woman's name: Bsp.: Iunia Prima (feminized surname [father's name] Cognomen).
+	DuaNomina,
+
+	/// Typical antique roman man's name: Bsp.: Gaius Julius Caeser (firstname surname [father's name] Cognomen).
+	TriaNomina,
 
 	Supername,
 }
@@ -379,7 +387,7 @@ impl Names {
 				};
 				Some( format!( "{} {} {}", rank, title, name ) )
 			},
-			NameCombo::Nickname => self.nickname.clone(),
+			NameCombo::Nickname => self.nickname.as_ref().map( |x| add_case_letter( x, case ) ),
 			NameCombo::FirstNickname => {
 				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
 					return None;
@@ -394,6 +402,23 @@ impl Names {
 					return None;
 				};
 				Some( format!( "{} {}", nick, self.designate( NameCombo::Surname, case ).unwrap() ) )
+			},
+			NameCombo::DuaNomina => {
+				let Some( nick ) = self.nickname.clone() else {
+					return None;
+				};
+				let res = add_case_letter( &format!( "{} {}", self.surname, nick ), case );
+				Some( res )
+			},
+			NameCombo::TriaNomina => {
+				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
+					return None;
+				};
+				let Some( nick ) = self.nickname.clone() else {
+					return None;
+				};
+				let res = add_case_letter( &format!( "{} {} {}", name, self.surname, nick ), case );
+				Some( res )
 			},
 			_ => {
 				eprintln!( "\"{:?}\" not yet implemented.", form );
@@ -659,6 +684,48 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::RankTitleName, GrammaticalCase::Nominative ).unwrap(),
 			"Majorin Dr. Penelope von Würzinger".to_string()
+		);
+	}
+
+	#[test]
+	fn name_strings_roman_male() {
+		// Gaius Julius Caesar
+		let name = Names {
+			forenames: vec![ "Gaius".to_string() ],
+			predicate: None,
+			surname: "Julius".to_string(),
+			birthname: None,
+			title: None,
+			rank: None,
+			nickname: Some( "Caesar".to_string() ),
+			supername: None,
+			gender: Gender::Male,
+		};
+
+		assert_eq!(
+			name.designate( NameCombo::TriaNomina, GrammaticalCase::Nominative ).unwrap(),
+			"Gaius Julius Caesar".to_string()
+		);
+	}
+
+	#[test]
+	fn name_strings_roman_female() {
+		// Iunia Prima
+		let name = Names {
+			forenames: Vec::new(),
+			predicate: None,
+			surname: "Iunia".to_string(),
+			birthname: None,
+			title: None,
+			rank: None,
+			nickname: Some( "Prima".to_string() ),
+			supername: None,
+			gender: Gender::Female,
+		};
+
+		assert_eq!(
+			name.designate( NameCombo::DuaNomina, GrammaticalCase::Nominative ).unwrap(),
+			"Iunia Prima".to_string()
 		);
 	}
 }
