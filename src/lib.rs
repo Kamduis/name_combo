@@ -334,6 +334,11 @@ impl Names {
 		self
 	}
 
+	/// Return the `Gender`.
+	pub fn gender( &self ) -> &Option<Gender> {
+		&self.gender
+	}
+
 	/// Returns all fornames.
 	pub fn forenames( &self ) -> &Vec<String> {
 		&self.forenames
