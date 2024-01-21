@@ -26,7 +26,7 @@ fn initials( text: &str ) -> String {
 		return "".to_string();
 	}
 
-	text.split( " " )
+	text.split( ' ' )
 		.map( |x| format!( "{}.", x.chars().next().unwrap() ) )
 		.collect::<Vec<String>>()
 		.join( " " )
@@ -583,7 +583,7 @@ impl Names {
 				Some( res )
 			},
 			NameCombo::OrderedName => {
-				let names = vec![
+				let names = [
 					self.firstname(),
 					self.predicate.as_ref(),
 				];
@@ -604,8 +604,8 @@ impl Names {
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::OrderedTitleName => {
-				let firstname = self.firstname().map( |x| x.clone() );
-				let names = vec![
+				let firstname = self.firstname().cloned();
+				let names = [
 					&self.title,
 					&firstname,
 					&self.predicate,
