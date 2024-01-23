@@ -1,6 +1,9 @@
 //! This crate provides the means to save and represent person's names.
 //!
 //! In its current state this crate concentrates on german names but can be used to represent a variety of names of different languages.
+//!
+//! # Optional Features
+//! * **serde** Enables `serde` support.
 
 
 
@@ -10,6 +13,9 @@
 
 
 use std::fmt;
+
+#[cfg( feature = "serde" )]
+use serde::{Serialize, Deserialize};
 
 
 
@@ -83,6 +89,7 @@ pub enum GrammaticalCase {
 
 
 /// A subset of possible genders.
+#[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Clone, Copy, PartialEq, Eq, Debug )]
 pub enum Gender {
 	Male,
@@ -117,6 +124,7 @@ impl fmt::Display for Gender {
 
 
 /// The possible combination of names.
+#[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Clone, Copy, PartialEq, Eq, Debug )]
 pub enum NameCombo {
 	/// This represents the standard (german) name combination of first name and surname. Bsp.: "Penelope von Würzinger"
@@ -254,6 +262,7 @@ pub enum NameCombo {
 
 
 /// The different names of a person that can be combined in various ways.
+#[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Clone, PartialEq, Eq, Default, Debug )]
 pub struct Names {
 	forenames: Vec<String>,
