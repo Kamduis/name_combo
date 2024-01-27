@@ -13,9 +13,31 @@
 
 
 use std::fmt;
+use std::str::FromStr;
+
+#[allow( unused )]
+use log::{error, warn, info, debug};
 
 #[cfg( feature = "serde" )]
 use serde::{Serialize, Deserialize};
+
+use thiserror::Error;
+
+
+
+
+//=============================================================================
+// Errors
+
+
+#[derive( Error, Debug )]
+pub enum NameError {
+	#[error( "This grammatical case is illegal." )]
+	IllegalCase,
+
+	#[error( "This name combo is illegal." )]
+	IllegalCombo,
+}
 
 
 
@@ -79,12 +101,31 @@ fn add_case_letter( text: &str, case: GrammaticalCase ) -> String {
 
 
 /// The different grammatical cases.
-#[derive( Clone, Copy, Debug )]
+#[derive( Clone, Copy, PartialEq, Eq, Debug )]
 pub enum GrammaticalCase {
 	Nominative,
 	Genetive,
 	Dative,
 	Accusative,
+}
+
+impl FromStr for GrammaticalCase {
+	type Err = NameError;
+
+	fn from_str( s: &str ) -> Result<Self, Self::Err> {
+		let res = match s.to_lowercase().as_str() {
+			"nominative" => Self::Nominative,
+			"genetive" => Self::Genetive,
+			"dative" => Self::Dative,
+			"accusative" => Self::Accusative,
+			_ => {
+				error!( "{:?} is not a supported grammatical case.", s );
+				return Err( NameError::IllegalCase );
+			},
+		};
+
+		Ok( res )
+	}
 }
 
 
@@ -252,6 +293,63 @@ pub enum NameCombo {
 
 	/// Like `orderedName`, only with title added. Bsp.: Würzinger, Dr. Penelope von
 	OrderedTitleName,
+}
+
+impl FromStr for NameCombo {
+	type Err = NameError;
+
+	fn from_str( s: &str ) -> Result<Self, Self::Err> {
+		let res = match s {
+			"Name" => Self::Name,
+			"Fullname" => Self::Fullname,
+			"Firstname" => Self::Firstname,
+			"Forenames" => Self::Forenames,
+			"Surname" => Self::Surname,
+			"Title" => Self::Title,
+			"TitleName" => Self::TitleName,
+			"TitleFirstname" => Self::TitleFirstname,
+			"TitleSurname" => Self::TitleSurname,
+			"TitleFullname" => Self::TitleFullname,
+			"Polite" => Self::Polite,
+			"PoliteName" => Self::PoliteName,
+			"PoliteFirstname" => Self::PoliteFirstname,
+			"PoliteSurname" => Self::PoliteSurname,
+			"PoliteFullname" => Self::PoliteFullname,
+			"PoliteTitleName" => Self::PoliteTitleName,
+			"Rank" => Self::Rank,
+			"PoliteRank" => Self::PoliteRank,
+			"RankName" => Self::RankName,
+			"RankFirstname" => Self::RankFirstname,
+			"RankSurname" => Self::RankSurname,
+			"RankFullname" => Self::RankFullname,
+			"RankTitleName" => Self::RankTitleName,
+			"Nickname" => Self::Nickname,
+			"FirstNickname" => Self::FirstNickname,
+			"NickSurname" => Self::NickSurname,
+			"Honor" => Self::Honor,
+			"Honortitle" => Self::Honortitle,
+			"FirstHonorname" => Self::FirstHonorname,
+			"DuaNomina" => Self::DuaNomina,
+			"TriaNomina" => Self::TriaNomina,
+			"Supername" => Self::Supername,
+			"FirstSupername" => Self::FirstSupername,
+			"SuperName" => Self::SuperName,
+			"PoliteSupername" => Self::PoliteSupername,
+			"RankSupername" => Self::RankSupername,
+			"Initials" => Self::Initials,
+			"InitialsFull" => Self::InitialsFull,
+			"Sign" => Self::Sign,
+			"OrderedName" => Self::OrderedName,
+			"OrderedSurname" => Self::OrderedSurname,
+			"OrderedTitleName" => Self::OrderedTitleName,
+			_ => {
+				error!( "{:?} is not a supported name combination.", s );
+				return Err( NameError::IllegalCombo );
+			},
+		};
+
+		Ok( res )
+	}
 }
 
 
@@ -718,6 +816,12 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn grammatical_case_from_str() {
+		assert_eq!( GrammaticalCase::from_str( "nominative" ).unwrap(), GrammaticalCase::Nominative );
+		assert_eq!( GrammaticalCase::from_str( "Dative" ).unwrap(), GrammaticalCase::Dative );
+	}
+
+	#[test]
 	fn gender_title() {
 		assert_eq!( Gender::Male.polite().unwrap(), "Herr".to_string() );
 		assert_eq!( Gender::Female.polite().unwrap(), "Frau".to_string() );
@@ -731,6 +835,12 @@ mod tests {
 		assert_eq!( Gender::Female.to_string(), "♀".to_string() );
 		assert_eq!( Gender::Neutral.to_string(), "⚪".to_string() );
 		assert_eq!( Gender::Other.to_string(), "⚧".to_string() );
+	}
+
+	#[test]
+	fn name_combo_from_str() {
+		assert_eq!( NameCombo::from_str( "Name" ).unwrap(), NameCombo::Name );
+		assert_eq!( NameCombo::from_str( "PoliteTitleName" ).unwrap(), NameCombo::PoliteTitleName );
 	}
 
 	#[test]
