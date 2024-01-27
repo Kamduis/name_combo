@@ -1,6 +1,6 @@
 //! This crate provides the means to save and represent person's names.
 //!
-//! In its current state this crate concentrates on german names but can be used to represent a variety of names of different languages.
+//! In its current state this crate concentrates on German names but can be used to represent a variety of names of different languages.
 //!
 //! # Optional Features
 //! * **serde** Enables `serde` support.
