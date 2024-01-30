@@ -1,4 +1,4 @@
-# names
+# name_combo
 
 This crate provides the means to save and represent person's names.
 
@@ -11,7 +11,7 @@ To use this crate your `Cargo.toml` could look like this:
 
 ```toml
 [dependencies]
-names = "0.x.0"
+name_combo = "0.x.0"
 ```
 
 (replace `x` with the number of the most recent released version).
