@@ -148,15 +148,27 @@ impl Gender {
 			Self::Neutral | Self::Other => None,
 		}
 	}
-}
 
-impl fmt::Display for Gender {
-	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
+	/// Returns the symbol representing the gender of `self`.
+	pub fn to_symbol( &self ) -> String {
 		let res = match self {
 			Self::Male    => "♂",
 			Self::Female  => "♀",
 			Self::Neutral => "⚪",
 			Self::Other   => "⚧",
+		};
+
+		res.to_string()
+	}
+}
+
+impl fmt::Display for Gender {
+	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
+		let res = match self {
+			Self::Male    => "männlich",
+			Self::Female  => "weiblich",
+			Self::Neutral => "neutral",
+			Self::Other   => "anders",
 		};
 
 		write!( f, "{}", res )
@@ -831,10 +843,18 @@ mod tests {
 
 	#[test]
 	fn gender_symbol() {
-		assert_eq!( Gender::Male.to_string(), "♂".to_string() );
-		assert_eq!( Gender::Female.to_string(), "♀".to_string() );
-		assert_eq!( Gender::Neutral.to_string(), "⚪".to_string() );
-		assert_eq!( Gender::Other.to_string(), "⚧".to_string() );
+		assert_eq!( Gender::Male.to_symbol(), "♂".to_string() );
+		assert_eq!( Gender::Female.to_symbol(), "♀".to_string() );
+		assert_eq!( Gender::Neutral.to_symbol(), "⚪".to_string() );
+		assert_eq!( Gender::Other.to_symbol(), "⚧".to_string() );
+	}
+
+	#[test]
+	fn gender_text() {
+		assert_eq!( Gender::Male.to_string(), "männlich".to_string() );
+		assert_eq!( Gender::Female.to_string(), "weiblich".to_string() );
+		assert_eq!( Gender::Neutral.to_string(), "neutral".to_string() );
+		assert_eq!( Gender::Other.to_string(), "anders".to_string() );
 	}
 
 	#[test]
