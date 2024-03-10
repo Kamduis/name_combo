@@ -814,6 +814,32 @@ impl Names {
 			},
 		}
 	}
+
+	/// Returns a designation by following the following list of precidence, returning the first that is possible. If none of the provided alternatives is available, this function returns `None`.
+	///
+	/// 1. `NameCombo::Fullname`
+	/// 2. `NameCombo::Firstname`
+	/// 3. `NameCombo::Surname`
+	/// 4. `NameCombo::Nickname`
+	/// 5. `NameCombo::Supername`
+	///
+	/// If the first choice is not available, the next item is tried and so forth until one option is available or none are, iin which case this function returns `None`.
+	///
+	/// # Arguments
+	/// * `case` The grammatical case the name will be transformed into.
+	pub fn moniker(
+		&self,
+		case: GrammaticalCase
+	) -> Option<String> {
+		self.designate( NameCombo::Fullname, case )
+			.or( self.designate( NameCombo::Firstname, case )
+				.or( self.designate( NameCombo::Surname, case )
+					.or( self.designate( NameCombo::Nickname, case )
+						.or( self.designate( NameCombo::Supername, case ) )
+					)
+				)
+			)
+	}
 }
 
 
@@ -1279,6 +1305,45 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::DuaNomina, GrammaticalCase::Nominative ).unwrap(),
 			"Iunia Prima".to_string()
+		);
+	}
+
+	#[test]
+	fn name_moniker() {
+		assert_eq!( Names::new().moniker( GrammaticalCase::Nominative ), None );
+		assert_eq!(
+			Names::new()
+				.with_forenames( &[ "Penelope", "Karin" ] )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Penelope".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_forenames( &[ "Penelope", "Karin" ] )
+				.with_surname( "Würzinger" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Penelope Karin Würzinger".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_forenames( &[ "Penelope", "Karin" ] )
+				.with_predicate( "von" )
+				.with_surname( "Würzinger" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Penelope Karin von Würzinger".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_nickname( "Würzli" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Würzli".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_nickname( "Würzli" )
+				.with_surname( "Würzinger" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Würzinger".to_string()
 		);
 	}
 }
