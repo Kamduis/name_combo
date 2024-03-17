@@ -12,6 +12,7 @@
 // Crates
 
 
+use std::hash::Hash;
 use std::fmt;
 use std::str::FromStr;
 
@@ -131,7 +132,7 @@ impl FromStr for GrammaticalCase {
 
 /// A subset of possible genders.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Clone, Copy, PartialEq, Eq, Debug )]
+#[derive( Clone, Copy, Hash, PartialEq, Eq, Debug )]
 pub enum Gender {
 	Male,
 	Female,
@@ -373,7 +374,7 @@ impl FromStr for NameCombo {
 
 /// The different names of a person that can be combined in various ways.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Clone, PartialEq, Eq, Default, Debug )]
+#[derive( Clone, Hash, PartialEq, Eq, Default, Debug )]
 pub struct Names {
 	#[cfg_attr( feature = "serde", serde( default ) )]
 	forenames: Vec<String>,
