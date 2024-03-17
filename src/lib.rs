@@ -375,15 +375,34 @@ impl FromStr for NameCombo {
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Clone, PartialEq, Eq, Default, Debug )]
 pub struct Names {
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	forenames: Vec<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	predicate: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	surname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	birthname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	title: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	rank: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	nickname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	honorname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	supername: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	gender: Option<Gender>,
 }
 
