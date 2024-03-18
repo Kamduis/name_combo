@@ -116,7 +116,7 @@ impl FromStr for GrammaticalCase {
 	fn from_str( s: &str ) -> Result<Self, Self::Err> {
 		let res = match s.to_lowercase().as_str() {
 			"nominative" => Self::Nominative,
-			"genetive" => Self::Genetive,
+			"genetive" | "s" => Self::Genetive,
 			"dative" => Self::Dative,
 			"accusative" => Self::Accusative,
 			_ => {
