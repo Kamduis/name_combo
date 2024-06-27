@@ -492,14 +492,14 @@ impl Names {
 	}
 
 	/// Returns the first forname. If no forenames are given, this method returns `None`.
-	pub fn firstname( &self ) -> Option<&String> {
-		self.forenames.first()
+	pub fn firstname( &self ) -> Option<&str> {
+		self.forenames.first().map( |x| x.as_str() )
 	}
 
 	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
 	pub fn surname_full( &self ) -> Option<String> {
 		let res = match &self.predicate {
-			Some( x ) => format!( "{} {}", x, &self.surname.clone()? ),
+			Some( x ) => format!( "{} {}", x, &self.surname.as_ref()? ),
 			None => self.surname.clone()?,
 		};
 
@@ -619,13 +619,15 @@ impl Names {
 			},
 			NameCombo::DuaNomina => {
 				let nick = self.nickname.as_ref()?;
-				let res = add_case_letter( &format!( "{} {}", self.surname.clone()?, nick ), case );
+				let surname = self.surname.as_ref()?;
+				let res = add_case_letter( &format!( "{} {}", surname, nick ), case );
 				Some( res )
 			},
 			NameCombo::TriaNomina => {
 				let name = self.designate( NameCombo::Firstname, case )?;
 				let nick = self.nickname.as_ref()?;
-				let res = add_case_letter( &format!( "{} {} {}", name, self.surname.clone()?, nick ), case );
+				let surname = self.surname.as_ref()?;
+				let res = add_case_letter( &format!( "{} {} {}", name, surname, nick ), case );
 				Some( res )
 			},
 			NameCombo::Honor => self.honorname.as_ref().map( |x| add_case_letter( x, case ) ),
@@ -653,36 +655,38 @@ impl Names {
 			NameCombo::OrderedName => {
 				let names = [
 					self.firstname(),
-					self.predicate.as_ref(),
+					self.predicate.as_deref(),
 				];
 				let res = format!( "{}, {}",
-					self.surname.clone()?,
+					self.surname.as_ref()?,
 					names.iter()
-						.filter_map( |&x| x.cloned() )
-						.collect::<Vec<String>>()
+						.filter_map( |&x| x )
+						.collect::<Vec<&str>>()
 						.join( " " )
 				);
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::OrderedSurname => {
+				let surname = self.surname.as_ref()?;
 				let res = match &self.predicate {
-					Some( x ) => format!( "{}, {}", self.surname.clone()?, x ),
-					None => self.surname.clone()?,
+					Some( x ) => format!( "{}, {}", surname, x ),
+					None => surname.clone(),
 				};
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::OrderedTitleName => {
-				let firstname = self.firstname().cloned();
+				// let firstname = self.firstname();
+				let surname = self.surname.as_ref()?;
 				let names = [
-					&self.title,
-					&firstname,
-					&self.predicate,
+					self.title.as_deref(),
+					self.firstname(),
+					self.predicate.as_deref(),
 				];
 				let res = format!( "{}, {}",
-					self.surname.clone()?,
+					surname,
 					names.iter()
-						.filter_map( |&x| x.clone() )
-						.collect::<Vec<String>>()
+						.filter_map( |&x| x )
+						.collect::<Vec<&str>>()
 						.join( " " )
 				);
 				Some( add_case_letter( &res, case ) )
@@ -706,7 +710,7 @@ impl Names {
 					None => forenames,
 				};
 				let mut name_initials = initials( &name );
-				name_initials.push_str( &format!( " {}", self.surname.clone()? ) );
+				name_initials.push_str( &format!( " {}", self.surname.as_deref()? ) );
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
 				};
