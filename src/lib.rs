@@ -12,6 +12,7 @@
 // Crates
 
 
+use std::hash::Hash;
 use std::fmt;
 use std::str::FromStr;
 
@@ -115,7 +116,7 @@ impl FromStr for GrammaticalCase {
 	fn from_str( s: &str ) -> Result<Self, Self::Err> {
 		let res = match s.to_lowercase().as_str() {
 			"nominative" => Self::Nominative,
-			"genetive" => Self::Genetive,
+			"genetive" | "s" => Self::Genetive,
 			"dative" => Self::Dative,
 			"accusative" => Self::Accusative,
 			_ => {
@@ -131,7 +132,7 @@ impl FromStr for GrammaticalCase {
 
 /// A subset of possible genders.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Clone, Copy, PartialEq, Eq, Debug )]
+#[derive( Clone, Copy, Hash, PartialEq, Eq, Debug )]
 pub enum Gender {
 	Male,
 	Female,
@@ -148,15 +149,27 @@ impl Gender {
 			Self::Neutral | Self::Other => None,
 		}
 	}
-}
 
-impl fmt::Display for Gender {
-	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
+	/// Returns the symbol representing the gender of `self`.
+	pub fn to_symbol( &self ) -> String {
 		let res = match self {
 			Self::Male    => "♂",
 			Self::Female  => "♀",
 			Self::Neutral => "⚪",
 			Self::Other   => "⚧",
+		};
+
+		res.to_string()
+	}
+}
+
+impl fmt::Display for Gender {
+	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
+		let res = match self {
+			Self::Male    => "männlich",
+			Self::Female  => "weiblich",
+			Self::Neutral => "neutral",
+			Self::Other   => "anders",
 		};
 
 		write!( f, "{}", res )
@@ -361,17 +374,36 @@ impl FromStr for NameCombo {
 
 /// The different names of a person that can be combined in various ways.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Clone, PartialEq, Eq, Default, Debug )]
+#[derive( Clone, Hash, PartialEq, Eq, Default, Debug )]
 pub struct Names {
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	forenames: Vec<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	predicate: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	surname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	birthname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	title: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	rank: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	nickname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	honorname: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	supername: Option<String>,
+
+	#[cfg_attr( feature = "serde", serde( default ) )]
 	gender: Option<Gender>,
 }
 
@@ -460,14 +492,14 @@ impl Names {
 	}
 
 	/// Returns the first forname. If no forenames are given, this method returns `None`.
-	pub fn firstname( &self ) -> Option<&String> {
-		self.forenames.first()
+	pub fn firstname( &self ) -> Option<&str> {
+		self.forenames.first().map( |x| x.as_str() )
 	}
 
 	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
 	pub fn surname_full( &self ) -> Option<String> {
 		let res = match &self.predicate {
-			Some( x ) => format!( "{} {}", x, &self.surname.clone()? ),
+			Some( x ) => format!( "{} {}", x, &self.surname.as_ref()? ),
 			None => self.surname.clone()?,
 		};
 
@@ -500,177 +532,107 @@ impl Names {
 			},
 			NameCombo::Title => self.title.clone(),
 			NameCombo::TitleName => {
-				let Some( title ) = self.title.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Name, case ) else {
-					return None;
-				};
+				let title = self.title.as_ref()?;
+				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {}", title, name ) )
 			},
 			NameCombo::TitleFirstname => {
-				let Some( title ) = self.title.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
-					return None;
-				};
+				let title = self.title.as_ref()?;
+				let name = self.designate( NameCombo::Firstname, case )?;
 				Some( format!( "{} {}", title, name ) )
 			},
 			NameCombo::TitleSurname => {
-				let Some( title ) = self.title.clone() else {
-					return None;
-				};
+				let title = self.title.as_ref()?;
 				Some( format!( "{} {}", title, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::TitleFullname => {
-				let Some( title ) = self.title.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
-					return None;
-				};
+				let title = self.title.as_ref()?;
+				let name = self.designate( NameCombo::Fullname, case )?;
 				Some( format!( "{} {}", title, name ) )
 			},
 			NameCombo::Polite => self.gender?.polite(),
 			NameCombo::PoliteName => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Name, case ) else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
+				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteFirstname => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
+				let name = self.designate( NameCombo::Firstname, case )?;
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteSurname => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
 				Some( format!( "{} {}", polite, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::PoliteFullname => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
+				let name = self.designate( NameCombo::Fullname, case )?;
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteTitleName => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
-				let Some( title ) = self.title.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Name, case ) else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
+				let title = self.title.as_ref()?;
+				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {} {}", polite, title, name ) )
 			},
 			NameCombo::Rank => self.rank.clone(),
 			NameCombo::RankName => {
-				let Some( rank ) = self.rank.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Name, case ) else {
-					return None;
-				};
+				let rank = self.rank.as_ref()?;
+				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::PoliteRank => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
-				let Some( rank ) = self.rank.clone() else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
+				let rank = self.rank.as_ref()?;
 				Some( format!( "{} {}", polite, rank ) )
 			},
 			NameCombo::RankFirstname => {
-				let Some( rank ) = self.rank.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
-					return None;
-				};
+				let rank = self.rank.as_ref()?;
+				let name = self.designate( NameCombo::Firstname, case )?;
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::RankSurname => {
-				let Some( rank ) = self.rank.clone() else {
-					return None;
-				};
+				let rank = self.rank.as_ref()?;
 				Some( format!( "{} {}", rank, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::RankFullname => {
-				let Some( rank ) = self.rank.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Fullname, case ) else {
-					return None;
-				};
+				let rank = self.rank.as_ref()?;
+				let name = self.designate( NameCombo::Fullname, case )?;
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::RankTitleName => {
-				let Some( rank ) = self.rank.clone() else {
-					return None;
-				};
-				let Some( title ) = self.title.clone() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Name, case ) else {
-					return None;
-				};
+				let rank = self.rank.as_ref()?;
+				let title = self.title.as_ref()?;
+				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {} {}", rank, title, name ) )
 			},
 			NameCombo::Nickname => self.nickname.as_ref().map( |x| add_case_letter( x, case ) ),
 			NameCombo::FirstNickname => {
-				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
-					return None;
-				};
-				let Some( nick ) = self.nickname.clone() else {
-					return None;
-				};
+				let name = self.designate( NameCombo::Firstname, case )?;
+				let nick = self.nickname.as_ref()?;
 				Some( format!( "{} {}", name, nick ) )
 			},
 			NameCombo::NickSurname => {
-				let Some( nick ) = self.nickname.clone() else {
-					return None;
-				};
+				let nick = self.nickname.as_ref()?;
 				Some( format!( "{} {}", nick, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::DuaNomina => {
-				let Some( nick ) = self.nickname.clone() else {
-					return None;
-				};
-				let res = add_case_letter( &format!( "{} {}", self.surname.clone()?, nick ), case );
+				let nick = self.nickname.as_ref()?;
+				let surname = self.surname.as_ref()?;
+				let res = add_case_letter( &format!( "{} {}", surname, nick ), case );
 				Some( res )
 			},
 			NameCombo::TriaNomina => {
-				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
-					return None;
-				};
-				let Some( nick ) = self.nickname.clone() else {
-					return None;
-				};
-				let res = add_case_letter( &format!( "{} {} {}", name, self.surname.clone()?, nick ), case );
+				let name = self.designate( NameCombo::Firstname, case )?;
+				let nick = self.nickname.as_ref()?;
+				let surname = self.surname.as_ref()?;
+				let res = add_case_letter( &format!( "{} {} {}", name, surname, nick ), case );
 				Some( res )
 			},
 			NameCombo::Honor => self.honorname.as_ref().map( |x| add_case_letter( x, case ) ),
 			NameCombo::Honortitle => {
-				let Some( honor ) = self.designate( NameCombo::Honor, case ) else {
-					return None;
-				};
+				let honor = self.designate( NameCombo::Honor, case )?;
 				let res = match self.gender {
 					Some( Gender::Female ) => format!( "Die {}", honor ),
 					Some( Gender::Male ) => format!( "Der {}", honor ),
@@ -680,12 +642,8 @@ impl Names {
 				Some( res )
 			},
 			NameCombo::FirstHonorname => {
-				let Some( name ) = self.designate( NameCombo::Firstname, case ) else {
-					return None;
-				};
-				let Some( honor ) = self.designate( NameCombo::Honor, case ) else {
-					return None;
-				};
+				let name = self.designate( NameCombo::Firstname, case )?;
+				let honor = self.designate( NameCombo::Honor, case )?;
 				let res = match self.gender {
 					Some( Gender::Female ) => format!( "{} die {}", name, honor ),
 					Some( Gender::Male ) => format!( "{} der {}", name, honor ),
@@ -697,50 +655,48 @@ impl Names {
 			NameCombo::OrderedName => {
 				let names = [
 					self.firstname(),
-					self.predicate.as_ref(),
+					self.predicate.as_deref(),
 				];
 				let res = format!( "{}, {}",
-					self.surname.clone()?,
+					self.surname.as_ref()?,
 					names.iter()
-						.filter_map( |&x| x.cloned() )
-						.collect::<Vec<String>>()
+						.filter_map( |&x| x )
+						.collect::<Vec<&str>>()
 						.join( " " )
 				);
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::OrderedSurname => {
+				let surname = self.surname.as_ref()?;
 				let res = match &self.predicate {
-					Some( x ) => format!( "{}, {}", self.surname.clone()?, x ),
-					None => self.surname.clone()?,
+					Some( x ) => format!( "{}, {}", surname, x ),
+					None => surname.clone(),
 				};
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::OrderedTitleName => {
-				let firstname = self.firstname().cloned();
+				// let firstname = self.firstname();
+				let surname = self.surname.as_ref()?;
 				let names = [
-					&self.title,
-					&firstname,
-					&self.predicate,
+					self.title.as_deref(),
+					self.firstname(),
+					self.predicate.as_deref(),
 				];
 				let res = format!( "{}, {}",
-					self.surname.clone()?,
+					surname,
 					names.iter()
-						.filter_map( |&x| x.clone() )
-						.collect::<Vec<String>>()
+						.filter_map( |&x| x )
+						.collect::<Vec<&str>>()
 						.join( " " )
 				);
 				Some( add_case_letter( &res, case ) )
 			},
 			NameCombo::Initials => {
-				let Some( name ) = self.designate( NameCombo::Name, GrammaticalCase::Nominative ) else {
-					return None;
-				};
+				let name = self.designate( NameCombo::Name, GrammaticalCase::Nominative )?;
 				Some( initials( &name ) )
 			},
 			NameCombo::InitialsFull => {
-				let Some( forenames ) = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative ) else {
-					return None;
-				};
+				let forenames = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative )?;
 				let mut name_initials = initials( &format!( "{} {}", forenames, self.surname_full()? ) );
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
@@ -748,15 +704,13 @@ impl Names {
 				Some( name_initials )
 			},
 			NameCombo::Sign => {
-				let Some( forenames ) = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative ) else {
-					return None;
-				};
+				let forenames = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative )?;
 				let name = match &self.predicate {
 					Some( x ) => format!( "{} {}", forenames, x ),
 					None => forenames,
 				};
 				let mut name_initials = initials( &name );
-				name_initials.push_str( &format!( " {}", self.surname.clone()? ) );
+				name_initials.push_str( &format!( " {}", self.surname.as_deref()? ) );
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
 				};
@@ -764,43 +718,55 @@ impl Names {
 			},
 			NameCombo::Supername => self.supername.as_ref().map( |x| add_case_letter( x, case ) ),
 			NameCombo::FirstSupername => {
-				let Some( firstname ) = self.firstname() else {
-					return None;
-				};
-				let Some( supername ) = self.designate( NameCombo::Supername, case ) else {
-					return None;
-				};
+				let firstname = self.firstname()?;
+				let supername = self.designate( NameCombo::Supername, case )?;
 				Some( format!( "{} {}", firstname, supername ) )
 			},
 			NameCombo::SuperName => {
 				if self.forenames.is_empty() {
 					return None
 				}
-				let Some( supername ) = self.designate( NameCombo::Supername, case ) else {
-					return None;
-				};
+				let supername = self.designate( NameCombo::Supername, case )?;
 				let res = add_case_letter( &format!( "{} {} {}", self.forenames[0], supername, self.surname_full()? ), case );
 				Some( res )
 			},
 			NameCombo::PoliteSupername => {
-				let Some( polite ) = self.gender?.polite() else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Supername, case ) else {
-					return None;
-				};
+				let polite = self.gender?.polite()?;
+				let name = self.designate( NameCombo::Supername, case )?;
 				Some( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::RankSupername => {
-				let Some( ref rank ) = self.rank else {
-					return None;
-				};
-				let Some( name ) = self.designate( NameCombo::Supername, case ) else {
-					return None;
-				};
+				let rank = self.rank.as_ref()?;
+				let name = self.designate( NameCombo::Supername, case )?;
 				Some( format!( "{} {}", rank, name ) )
 			},
 		}
+	}
+
+	/// Returns a designation by following the following list of precidence, returning the first that is possible. If none of the provided alternatives is available, this function returns `None`.
+	///
+	/// 1. `NameCombo::Fullname`
+	/// 2. `NameCombo::Firstname`
+	/// 3. `NameCombo::Surname`
+	/// 4. `NameCombo::Nickname`
+	/// 5. `NameCombo::Supername`
+	///
+	/// If the first choice is not available, the next item is tried and so forth until one option is available or none are, iin which case this function returns `None`.
+	///
+	/// # Arguments
+	/// * `case` The grammatical case the name will be transformed into.
+	pub fn moniker(
+		&self,
+		case: GrammaticalCase
+	) -> Option<String> {
+		self.designate( NameCombo::Fullname, case )
+			.or( self.designate( NameCombo::Firstname, case )
+				.or( self.designate( NameCombo::Surname, case )
+					.or( self.designate( NameCombo::Nickname, case )
+						.or( self.designate( NameCombo::Supername, case ) )
+					)
+				)
+			)
 	}
 }
 
@@ -831,10 +797,18 @@ mod tests {
 
 	#[test]
 	fn gender_symbol() {
-		assert_eq!( Gender::Male.to_string(), "♂".to_string() );
-		assert_eq!( Gender::Female.to_string(), "♀".to_string() );
-		assert_eq!( Gender::Neutral.to_string(), "⚪".to_string() );
-		assert_eq!( Gender::Other.to_string(), "⚧".to_string() );
+		assert_eq!( Gender::Male.to_symbol(), "♂".to_string() );
+		assert_eq!( Gender::Female.to_symbol(), "♀".to_string() );
+		assert_eq!( Gender::Neutral.to_symbol(), "⚪".to_string() );
+		assert_eq!( Gender::Other.to_symbol(), "⚧".to_string() );
+	}
+
+	#[test]
+	fn gender_text() {
+		assert_eq!( Gender::Male.to_string(), "männlich".to_string() );
+		assert_eq!( Gender::Female.to_string(), "weiblich".to_string() );
+		assert_eq!( Gender::Neutral.to_string(), "neutral".to_string() );
+		assert_eq!( Gender::Other.to_string(), "anders".to_string() );
 	}
 
 	#[test]
@@ -1259,6 +1233,45 @@ mod tests {
 		assert_eq!(
 			name.designate( NameCombo::DuaNomina, GrammaticalCase::Nominative ).unwrap(),
 			"Iunia Prima".to_string()
+		);
+	}
+
+	#[test]
+	fn name_moniker() {
+		assert_eq!( Names::new().moniker( GrammaticalCase::Nominative ), None );
+		assert_eq!(
+			Names::new()
+				.with_forenames( &[ "Penelope", "Karin" ] )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Penelope".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_forenames( &[ "Penelope", "Karin" ] )
+				.with_surname( "Würzinger" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Penelope Karin Würzinger".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_forenames( &[ "Penelope", "Karin" ] )
+				.with_predicate( "von" )
+				.with_surname( "Würzinger" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Penelope Karin von Würzinger".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_nickname( "Würzli" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Würzli".to_string()
+		);
+		assert_eq!(
+			Names::new()
+				.with_nickname( "Würzli" )
+				.with_surname( "Würzinger" )
+				.moniker( GrammaticalCase::Nominative ).unwrap(),
+			"Würzinger".to_string()
 		);
 	}
 }
