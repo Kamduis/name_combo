@@ -532,21 +532,21 @@ impl Names {
 			},
 			NameCombo::Title => self.title.clone(),
 			NameCombo::TitleName => {
-				let title = self.title.clone()?;
+				let title = self.title.as_ref()?;
 				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {}", title, name ) )
 			},
 			NameCombo::TitleFirstname => {
-				let title = self.title.clone()?;
+				let title = self.title.as_ref()?;
 				let name = self.designate( NameCombo::Firstname, case )?;
 				Some( format!( "{} {}", title, name ) )
 			},
 			NameCombo::TitleSurname => {
-				let title = self.title.clone()?;
+				let title = self.title.as_ref()?;
 				Some( format!( "{} {}", title, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::TitleFullname => {
-				let title = self.title.clone()?;
+				let title = self.title.as_ref()?;
 				let name = self.designate( NameCombo::Fullname, case )?;
 				Some( format!( "{} {}", title, name ) )
 			},
@@ -572,28 +572,28 @@ impl Names {
 			},
 			NameCombo::PoliteTitleName => {
 				let polite = self.gender?.polite()?;
-				let title = self.title.clone()?;
+				let title = self.title.as_ref()?;
 				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {} {}", polite, title, name ) )
 			},
 			NameCombo::Rank => self.rank.clone(),
 			NameCombo::RankName => {
-				let rank = self.rank.clone()?;
+				let rank = self.rank.as_ref()?;
 				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::PoliteRank => {
 				let polite = self.gender?.polite()?;
-				let rank = self.rank.clone()?;
+				let rank = self.rank.as_ref()?;
 				Some( format!( "{} {}", polite, rank ) )
 			},
 			NameCombo::RankFirstname => {
-				let rank = self.rank.clone()?;
+				let rank = self.rank.as_ref()?;
 				let name = self.designate( NameCombo::Firstname, case )?;
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::RankSurname => {
-				let rank = self.rank.clone()?;
+				let rank = self.rank.as_ref()?;
 				Some( format!( "{} {}", rank, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::RankFullname => {
@@ -602,29 +602,29 @@ impl Names {
 				Some( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::RankTitleName => {
-				let rank = self.rank.clone()?;
-				let title = self.title.clone()?;
+				let rank = self.rank.as_ref()?;
+				let title = self.title.as_ref()?;
 				let name = self.designate( NameCombo::Name, case )?;
 				Some( format!( "{} {} {}", rank, title, name ) )
 			},
 			NameCombo::Nickname => self.nickname.as_ref().map( |x| add_case_letter( x, case ) ),
 			NameCombo::FirstNickname => {
 				let name = self.designate( NameCombo::Firstname, case )?;
-				let nick = self.nickname.clone()?;
+				let nick = self.nickname.as_ref()?;
 				Some( format!( "{} {}", name, nick ) )
 			},
 			NameCombo::NickSurname => {
-				let nick = self.nickname.clone()?;
+				let nick = self.nickname.as_ref()?;
 				Some( format!( "{} {}", nick, self.designate( NameCombo::Surname, case ).unwrap() ) )
 			},
 			NameCombo::DuaNomina => {
-				let nick = self.nickname.clone()?;
+				let nick = self.nickname.as_ref()?;
 				let res = add_case_letter( &format!( "{} {}", self.surname.clone()?, nick ), case );
 				Some( res )
 			},
 			NameCombo::TriaNomina => {
 				let name = self.designate( NameCombo::Firstname, case )?;
-				let nick = self.nickname.clone()?;
+				let nick = self.nickname.as_ref()?;
 				let res = add_case_letter( &format!( "{} {} {}", name, self.surname.clone()?, nick ), case );
 				Some( res )
 			},
