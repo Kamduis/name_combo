@@ -478,12 +478,12 @@ impl Names {
 		&self.gender
 	}
 
-	/// Returns all fornames.
+	/// Returns all forenames.
 	pub fn forenames( &self ) -> &Vec<String> {
 		&self.forenames
 	}
 
-	/// Returns all fornames as a string. Bsp. "Thomas Jakob". If no forename is given, this returns `None`.
+	/// Returns all forenames as a string. Bsp. "Thomas Jakob". If no forename is given, this returns `None`.
 	fn forenames_string( &self ) -> Option<String> {
 		if self.forenames.is_empty() {
 			return None;
@@ -491,7 +491,7 @@ impl Names {
 		Some( self.forenames.join( " " ) )
 	}
 
-	/// Returns the first forname. If no forenames are given, this method returns `None`.
+	/// Returns the first forename. If no forenames are given, this method returns `None`.
 	pub fn firstname( &self ) -> Option<&str> {
 		self.forenames.first().map( |x| x.as_str() )
 	}
@@ -743,7 +743,7 @@ impl Names {
 		}
 	}
 
-	/// Returns a designation by following the following list of precidence, returning the first that is possible. If none of the provided alternatives is available, this function returns `None`.
+	/// Returns a designation by following the following list of precedence, returning the first that is possible. If none of the provided alternatives is available, this function returns `None`.
 	///
 	/// 1. `NameCombo::Fullname`
 	/// 2. `NameCombo::Firstname`
@@ -751,7 +751,7 @@ impl Names {
 	/// 4. `NameCombo::Nickname`
 	/// 5. `NameCombo::Supername`
 	///
-	/// If the first choice is not available, the next item is tried and so forth until one option is available or none are, iin which case this function returns `None`.
+	/// If the first choice is not available, the next item is tried and so forth until one option is available or none are, in which case this function returns `None`.
 	///
 	/// # Arguments
 	/// * `case` The grammatical case the name will be transformed into.
