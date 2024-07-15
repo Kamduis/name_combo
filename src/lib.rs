@@ -1,9 +1,11 @@
-//! This crate provides the means to save and represent person's names.
+// File links are not supported by rustdoc
+//! [LICENSE-APACHE]: https://github.com/Kamduis/name_combo/blob/master/LICENSE-APACHE
+//! [LICENSE-MIT]: https://github.com/Kamduis/name_combo/blob/master/LICENSE-MIT
 //!
-//! In its current state this crate concentrates on German names but can be used to represent a variety of names of different languages.
-//!
-//! # Optional Features
-//! * **serde** Enables `serde` support.
+//! <style>
+//! .rustdoc-hidden { display: none; }
+//! </style>
+#![doc = include_str!( "../README.md" )]
 
 
 
