@@ -2,8 +2,13 @@
 name = "name_combo"
 version = "0.2.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Victor von Rhein"]
+description = "Representation of names."
+readme = "README.md"
+repository = "https://github.com/Kamduis/name_combo"
+license = "MIT OR Apache-2.0"
+keywords = ["name", "moniker"]
+categories = ["value-formatting"]
 
 [features]
 serde = ["dep:serde"]
