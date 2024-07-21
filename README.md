@@ -1,5 +1,7 @@
 <div align="center" class="rustdoc-hidden">
+
 # name_combo
+
 </div>
 
 This crate provides the means to save and represent person's names.
@@ -19,7 +21,7 @@ name_combo = "x.y.z"
 
 ## Optional Features
 
-* **serde** Enables [`serde`] support.
+* **serde:** Enables [`serde`][] support.
 
 
 
@@ -36,5 +38,6 @@ Licensed under either of
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 
+[`serde`]: https://docs.rs/serde/latest/serde/
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT

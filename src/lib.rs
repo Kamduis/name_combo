@@ -1,4 +1,6 @@
-// File links are not supported by rustdoc
+// Replace crate links with internal links when creating documentation with `cargo`.
+//! [`serde`]: serde
+// File links are not supported by rustdoc.
 //! [LICENSE-APACHE]: https://github.com/Kamduis/name_combo/blob/master/LICENSE-APACHE
 //! [LICENSE-MIT]: https://github.com/Kamduis/name_combo/blob/master/LICENSE-MIT
 //!
