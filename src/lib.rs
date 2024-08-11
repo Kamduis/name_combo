@@ -20,13 +20,11 @@ use std::hash::Hash;
 use std::fmt;
 use std::str::FromStr;
 
-#[allow( unused )]
-use log::{error, warn, info, debug};
-
-#[cfg( feature = "serde" )]
-use serde::{Serialize, Deserialize};
-
+#[allow( unused )] use log::{error, warn, info, debug};
+#[cfg( feature = "serde" )] use serde::{Serialize, Deserialize};
 use thiserror::Error;
+use unic_langid::LanguageIdentifier;
+
 
 
 
@@ -35,13 +33,19 @@ use thiserror::Error;
 // Errors
 
 
-#[derive( Error, Debug )]
+#[derive( Error, PartialEq, Debug )]
 pub enum NameError {
 	#[error( "This grammatical case is illegal." )]
 	IllegalCase,
 
 	#[error( "This name combo is illegal." )]
 	IllegalCombo,
+
+	#[error( "Name element missing: `{0}`" )]
+	MissingNameElement( String ),
+
+	#[error( "Language not yet supported: `{0}`" )]
+	LangNotSupported( String ),
 }
 
 
@@ -66,16 +70,20 @@ fn initials( text: &str ) -> String {
 }
 
 
-/// Adding letters to `text` depending on the grammatical case. `text` is assumed to be of the Nominative case.
+/// Adding letters to `text` depending on the grammatical case. `text` is assumed to be of the nominative case.
 ///
-/// Bsp. Günther
-/// => Günther (Nominative)
-/// => Günthers (Genetive)
-/// => Günther (Dative)
-/// => Günthers (Accusative)
-fn add_case_letter( text: &str, case: GrammaticalCase ) -> String {
+/// # Arguments
+/// * `text` the text to modify depending on grammatical case.
+/// * `case` the grammatical case.
+/// * `locale` the locale to use the grammatical rules of. Currently only English and German are supported.
+fn add_case_letter( text: &str, case: GrammaticalCase, locale: &LanguageIdentifier ) -> Result<String, NameError> {
+	// In the currently supported languages (English and German), only the genetive case is changing the writing of a name.
+	let GrammaticalCase::Genetive = case else {
+		return Ok( text.to_string() );
+	};
+
 	if text.is_empty() {
-		return "".to_string();
+		return Ok( "".to_string() );
 	}
 
 	let glyph_last = text.chars()
@@ -83,19 +91,19 @@ fn add_case_letter( text: &str, case: GrammaticalCase ) -> String {
 		.to_lowercase()
 		.to_string();
 
-	let appendix = match case {
-		GrammaticalCase::Nominative | GrammaticalCase::Dative => "",
-		GrammaticalCase::Genetive => match glyph_last.as_str() {
-			"s" | "z" => "'",
+	let appendix = match locale.language.as_str() {
+		"en" => match glyph_last.as_str() {
+			"s" => "'",
+			_ => "'s",
+		},
+		"de" => match glyph_last.as_str() {
+			"s" | "ß" | "z" | "x" => "'",
 			_ => "s",
 		},
-		GrammaticalCase::Accusative => match glyph_last.as_str() {
-			"n" => "n",
-			_ => "",
-		},
+		_ => return Err( NameError::LangNotSupported( locale.to_string() ) ),
 	};
 
-	format!( "{}{}", text, appendix )
+	Ok( format!( "{}{}", text, appendix ) )
 }
 
 
@@ -488,16 +496,21 @@ impl Names {
 	}
 
 	/// Returns all forenames as a string. Bsp. "Thomas Jakob". If no forename is given, this returns `None`.
-	fn forenames_string( &self ) -> Option<String> {
+	fn forenames_string( &self ) -> Result<String, NameError> {
 		if self.forenames.is_empty() {
-			return None;
+			return Err( NameError::MissingNameElement( "forenames".to_string() ) );
 		}
-		Some( self.forenames.join( " " ) )
+		Ok( self.forenames.join( " " ) )
 	}
 
 	/// Returns the first forename. If no forenames are given, this method returns `None`.
 	pub fn firstname( &self ) -> Option<&str> {
 		self.forenames.first().map( |x| x.as_str() )
+	}
+
+	/// Returns the first forename. If no forenames are given, this method returns `None`.
+	fn firstname_res( &self ) -> Result<&str, NameError> {
+		self.forenames.first().map( |x| x.as_str() ).ok_or( NameError::MissingNameElement( "forenames".to_string() ) )
 	}
 
 	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
@@ -510,151 +523,216 @@ impl Names {
 		Some( res )
 	}
 
-	/// Returns a calling of a name.
-	pub fn designate( &self, form: NameCombo, case: GrammaticalCase ) -> Option<String> {
+	/// Returns the full surname including all predicates. Bsp. "von Würzinger".
+	fn surname_full_res( &self ) -> Result<String, NameError> {
+		let surname = self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )?;
+		let res = match &self.predicate {
+			Some( x ) => format!( "{} {}", x, surname ),
+			None => surname.clone(),
+		};
+
+		Ok( res )
+	}
+
+	/// This method returns how a persone with the name elements in `self` can be called according to the chose `form` in a specific language (`locale`). If `self` cannot be expressed with `form` (maybe a relevant name part is missing), this method returns an error.
+	///
+	/// # Arguments
+	/// * `form` The name combination.
+	/// * `case` the grammatical case.
+	/// * `locale` the locale to use the grammatical rules of. Currently only English and German are supported.
+	///
+	/// # Returns
+	/// Returns the calling of the name.
+	pub fn designate( &self, form: NameCombo, case: GrammaticalCase, locale: &LanguageIdentifier ) -> Result<String, NameError> {
 		match form {
 			NameCombo::Name => {
 				if self.forenames.is_empty() {
-					return None
+					return Err( NameError::MissingNameElement( "forenames".to_string() ) );
 				}
-				let res = add_case_letter( &format!( "{} {}", self.forenames[0], self.surname_full()? ), case );
-				Some( res )
+				let res = add_case_letter(
+					&format!( "{} {}", self.forenames[0], self.surname_full_res()? ),
+					case,
+					locale
+				)?;
+				Ok( res )
 			},
-			NameCombo::Surname => Some( add_case_letter( &self.surname_full()?, case ) ),
-			NameCombo::Firstname => self.firstname().as_ref().map( |x| add_case_letter( x, case ) ),
-			NameCombo::Forenames => self.forenames_string().map( |x| add_case_letter( &x, case ) ),
+			NameCombo::Surname => add_case_letter(
+				&self.surname_full_res()?,
+				case,
+				locale
+			),
+			NameCombo::Firstname => add_case_letter(
+				self.firstname_res()?,
+				case,
+				locale
+			),
+			NameCombo::Forenames => add_case_letter(
+				&self.forenames_string()?,
+				case,
+				locale
+			),
 			NameCombo::Fullname => {
-				if self.forenames.is_empty() {
-					return None
-				}
-				let name = add_case_letter( &format!( "{} {}", self.forenames_string().unwrap(), self.surname_full()? ), case );
+				let name = add_case_letter(
+					&format!( "{} {}", self.forenames_string()?, self.surname_full_res()? ),
+					case,
+					locale
+				)?;
 				let res = match &self.birthname {
 					Some( x ) => format!( "{} geb. {}", name, x ),
 					None => name,
 				};
-				Some( res )
+				Ok( res )
 			},
-			NameCombo::Title => self.title.clone(),
+			NameCombo::Title => self.title.clone().ok_or( NameError::MissingNameElement( "title".to_string() ) ),
 			NameCombo::TitleName => {
-				let title = self.title.as_ref()?;
-				let name = self.designate( NameCombo::Name, case )?;
-				Some( format!( "{} {}", title, name ) )
+				let title = self.title.as_ref().ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
+				let name = self.designate( NameCombo::Name, case, locale )?;
+				Ok( format!( "{} {}", title, name ) )
 			},
 			NameCombo::TitleFirstname => {
-				let title = self.title.as_ref()?;
-				let name = self.designate( NameCombo::Firstname, case )?;
-				Some( format!( "{} {}", title, name ) )
+				let title = self.title.as_ref().ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
+				let name = self.designate( NameCombo::Firstname, case, locale )?;
+				Ok( format!( "{} {}", title, name ) )
 			},
 			NameCombo::TitleSurname => {
-				let title = self.title.as_ref()?;
-				Some( format!( "{} {}", title, self.designate( NameCombo::Surname, case ).unwrap() ) )
+				let title = self.title.as_ref().ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
+				Ok( format!( "{} {}", title, self.designate( NameCombo::Surname, case, locale ).unwrap() ) )
 			},
 			NameCombo::TitleFullname => {
-				let title = self.title.as_ref()?;
-				let name = self.designate( NameCombo::Fullname, case )?;
-				Some( format!( "{} {}", title, name ) )
+				let title = self.title.as_ref().ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
+				let name = self.designate( NameCombo::Fullname, case, locale )?;
+				Ok( format!( "{} {}", title, name ) )
 			},
-			NameCombo::Polite => self.gender?.polite(),
+			NameCombo::Polite => self.gender
+				.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+				.polite()
+				.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) ),
 			NameCombo::PoliteName => {
-				let polite = self.gender?.polite()?;
-				let name = self.designate( NameCombo::Name, case )?;
-				Some( format!( "{} {}", polite, name ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				let name = self.designate( NameCombo::Name, case, locale )?;
+				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteFirstname => {
-				let polite = self.gender?.polite()?;
-				let name = self.designate( NameCombo::Firstname, case )?;
-				Some( format!( "{} {}", polite, name ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				let name = self.designate( NameCombo::Firstname, case, locale )?;
+				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteSurname => {
-				let polite = self.gender?.polite()?;
-				Some( format!( "{} {}", polite, self.designate( NameCombo::Surname, case ).unwrap() ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				Ok( format!( "{} {}", polite, self.designate( NameCombo::Surname, case, locale ).unwrap() ) )
 			},
 			NameCombo::PoliteFullname => {
-				let polite = self.gender?.polite()?;
-				let name = self.designate( NameCombo::Fullname, case )?;
-				Some( format!( "{} {}", polite, name ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				let name = self.designate( NameCombo::Fullname, case, locale )?;
+				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteTitleName => {
-				let polite = self.gender?.polite()?;
-				let title = self.title.as_ref()?;
-				let name = self.designate( NameCombo::Name, case )?;
-				Some( format!( "{} {} {}", polite, title, name ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				let title = self.title.as_ref()
+					.ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
+				let name = self.designate( NameCombo::Name, case, locale )?;
+				Ok( format!( "{} {} {}", polite, title, name ) )
 			},
-			NameCombo::Rank => self.rank.clone(),
+			NameCombo::Rank => self.rank.clone()
+				.ok_or( NameError::MissingNameElement( "title".to_string() ) ),
 			NameCombo::RankName => {
-				let rank = self.rank.as_ref()?;
-				let name = self.designate( NameCombo::Name, case )?;
-				Some( format!( "{} {}", rank, name ) )
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				let name = self.designate( NameCombo::Name, case, locale )?;
+				Ok( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::PoliteRank => {
-				let polite = self.gender?.polite()?;
-				let rank = self.rank.as_ref()?;
-				Some( format!( "{} {}", polite, rank ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				Ok( format!( "{} {}", polite, rank ) )
 			},
 			NameCombo::RankFirstname => {
-				let rank = self.rank.as_ref()?;
-				let name = self.designate( NameCombo::Firstname, case )?;
-				Some( format!( "{} {}", rank, name ) )
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				let name = self.designate( NameCombo::Firstname, case, locale )?;
+				Ok( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::RankSurname => {
-				let rank = self.rank.as_ref()?;
-				Some( format!( "{} {}", rank, self.designate( NameCombo::Surname, case ).unwrap() ) )
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				Ok( format!( "{} {}", rank, self.designate( NameCombo::Surname, case, locale ).unwrap() ) )
 			},
 			NameCombo::RankFullname => {
-				let rank = self.rank.as_ref()?;
-				let name = self.designate( NameCombo::Fullname, case )?;
-				Some( format!( "{} {}", rank, name ) )
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				let name = self.designate( NameCombo::Fullname, case, locale )?;
+				Ok( format!( "{} {}", rank, name ) )
 			},
 			NameCombo::RankTitleName => {
-				let rank = self.rank.as_ref()?;
-				let title = self.title.as_ref()?;
-				let name = self.designate( NameCombo::Name, case )?;
-				Some( format!( "{} {} {}", rank, title, name ) )
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				let title = self.title.as_ref().ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
+				let name = self.designate( NameCombo::Name, case, locale )?;
+				Ok( format!( "{} {} {}", rank, title, name ) )
 			},
-			NameCombo::Nickname => self.nickname.as_ref().map( |x| add_case_letter( x, case ) ),
+			NameCombo::Nickname => add_case_letter(
+				self.nickname.as_ref().ok_or( NameError::MissingNameElement( "nickname".to_string() ) )?,
+				case,
+				locale
+			),
 			NameCombo::FirstNickname => {
-				let name = self.designate( NameCombo::Firstname, case )?;
-				let nick = self.nickname.as_ref()?;
-				Some( format!( "{} {}", name, nick ) )
+				let name = self.designate( NameCombo::Firstname, case, locale )?;
+				let nick = self.nickname.as_ref().ok_or( NameError::MissingNameElement( "nickname".to_string() ) )?;
+				Ok( format!( "{} {}", name, nick ) )
 			},
 			NameCombo::NickSurname => {
-				let nick = self.nickname.as_ref()?;
-				Some( format!( "{} {}", nick, self.designate( NameCombo::Surname, case ).unwrap() ) )
+				let nick = self.nickname.as_ref().ok_or( NameError::MissingNameElement( "nickname".to_string() ) )?;
+				Ok( format!( "{} {}", nick, self.designate( NameCombo::Surname, case, locale )? ) )
 			},
 			NameCombo::DuaNomina => {
-				let nick = self.nickname.as_ref()?;
-				let surname = self.surname.as_ref()?;
-				let res = add_case_letter( &format!( "{} {}", surname, nick ), case );
-				Some( res )
+				let nick = self.nickname.as_ref().ok_or( NameError::MissingNameElement( "nickname".to_string() ) )?;
+				let surname = self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )?;
+				add_case_letter( &format!( "{} {}", surname, nick ), case, locale )
 			},
 			NameCombo::TriaNomina => {
-				let name = self.designate( NameCombo::Firstname, case )?;
-				let nick = self.nickname.as_ref()?;
-				let surname = self.surname.as_ref()?;
-				let res = add_case_letter( &format!( "{} {} {}", name, surname, nick ), case );
-				Some( res )
+				let name = self.designate( NameCombo::Firstname, case, locale )?;
+				let nick = self.nickname.as_ref().ok_or( NameError::MissingNameElement( "nickname".to_string() ) )?;
+				let surname = self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )?;
+				add_case_letter( &format!( "{} {} {}", name, surname, nick ), case, locale )
 			},
-			NameCombo::Honor => self.honorname.as_ref().map( |x| add_case_letter( x, case ) ),
+			NameCombo::Honor => add_case_letter(
+				self.honorname.as_ref().ok_or( NameError::MissingNameElement( "honorname".to_string() ) )?,
+				case,
+				locale
+			),
 			NameCombo::Honortitle => {
-				let honor = self.designate( NameCombo::Honor, case )?;
+				let honor = self.designate( NameCombo::Honor, case, locale )?;
 				let res = match self.gender {
 					Some( Gender::Female ) => format!( "Die {}", honor ),
 					Some( Gender::Male ) => format!( "Der {}", honor ),
 					Some( Gender::Neutral ) => format!( "Das {}", honor ),
 					_ => honor.to_string(),
 				};
-				Some( res )
+				Ok( res )
 			},
 			NameCombo::FirstHonorname => {
-				let name = self.designate( NameCombo::Firstname, case )?;
-				let honor = self.designate( NameCombo::Honor, case )?;
+				let name = self.designate( NameCombo::Firstname, case, locale )?;
+				let honor = self.designate( NameCombo::Honor, case, locale )?;
 				let res = match self.gender {
 					Some( Gender::Female ) => format!( "{} die {}", name, honor ),
 					Some( Gender::Male ) => format!( "{} der {}", name, honor ),
 					Some( Gender::Neutral ) => format!( "{} das {}", name, honor ),
 					_ => format!( "{} {}", name, honor ),
 				};
-				Some( res )
+				Ok( res )
 			},
 			NameCombo::OrderedName => {
 				let names = [
@@ -662,25 +740,25 @@ impl Names {
 					self.predicate.as_deref(),
 				];
 				let res = format!( "{}, {}",
-					self.surname.as_ref()?,
+					self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )?,
 					names.iter()
 						.filter_map( |&x| x )
 						.collect::<Vec<&str>>()
 						.join( " " )
 				);
-				Some( add_case_letter( &res, case ) )
+				add_case_letter( &res, case, locale )
 			},
 			NameCombo::OrderedSurname => {
-				let surname = self.surname.as_ref()?;
+				let surname = self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )?;
 				let res = match &self.predicate {
 					Some( x ) => format!( "{}, {}", surname, x ),
 					None => surname.clone(),
 				};
-				Some( add_case_letter( &res, case ) )
+				add_case_letter( &res, case, locale )
 			},
 			NameCombo::OrderedTitleName => {
 				// let firstname = self.firstname();
-				let surname = self.surname.as_ref()?;
+				let surname = self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )?;
 				let names = [
 					self.title.as_deref(),
 					self.firstname(),
@@ -693,56 +771,65 @@ impl Names {
 						.collect::<Vec<&str>>()
 						.join( " " )
 				);
-				Some( add_case_letter( &res, case ) )
+				add_case_letter( &res, case, locale )
 			},
 			NameCombo::Initials => {
-				let name = self.designate( NameCombo::Name, GrammaticalCase::Nominative )?;
-				Some( initials( &name ) )
+				let name = self.designate( NameCombo::Name, GrammaticalCase::Nominative, locale )?;
+				Ok( initials( &name ) )
 			},
 			NameCombo::InitialsFull => {
-				let forenames = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative )?;
-				let mut name_initials = initials( &format!( "{} {}", forenames, self.surname_full()? ) );
+				let forenames = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative, locale )?;
+				let mut name_initials = initials( &format!( "{} {}", forenames, self.surname_full_res()? ) );
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
 				};
-				Some( name_initials )
+				Ok( name_initials )
 			},
 			NameCombo::Sign => {
-				let forenames = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative )?;
+				let forenames = self.designate( NameCombo::Forenames, GrammaticalCase::Nominative, locale )?;
 				let name = match &self.predicate {
 					Some( x ) => format!( "{} {}", forenames, x ),
 					None => forenames,
 				};
 				let mut name_initials = initials( &name );
-				name_initials.push_str( &format!( " {}", self.surname.as_deref()? ) );
+				name_initials.push_str(
+					&format!( " {}", self.surname.as_ref().ok_or( NameError::MissingNameElement( "surname".to_string() ) )? )
+				);
 				if let Some( title ) = &self.title {
 					name_initials.insert_str( 0, &format!( "{} ", title ) );
 				};
-				Some( name_initials )
+				Ok( name_initials )
 			},
-			NameCombo::Supername => self.supername.as_ref().map( |x| add_case_letter( x, case ) ),
+			NameCombo::Supername => add_case_letter(
+				self.supername.as_ref().ok_or( NameError::MissingNameElement( "supername".to_string() ) )?
+				, case,
+				locale
+			),
 			NameCombo::FirstSupername => {
-				let firstname = self.firstname()?;
-				let supername = self.designate( NameCombo::Supername, case )?;
-				Some( format!( "{} {}", firstname, supername ) )
+				let firstname = self.firstname_res()?;
+				let supername = self.designate( NameCombo::Supername, case, locale )?;
+				Ok( format!( "{} {}", firstname, supername ) )
 			},
 			NameCombo::SuperName => {
-				if self.forenames.is_empty() {
-					return None
-				}
-				let supername = self.designate( NameCombo::Supername, case )?;
-				let res = add_case_letter( &format!( "{} {} {}", self.forenames[0], supername, self.surname_full()? ), case );
-				Some( res )
+				let supername = self.designate( NameCombo::Supername, case, locale )?;
+				add_case_letter(
+					&format!( "{} {} {}", self.firstname_res()?, supername, self.surname_full_res()? ),
+					case,
+					locale
+				)
 			},
 			NameCombo::PoliteSupername => {
-				let polite = self.gender?.polite()?;
-				let name = self.designate( NameCombo::Supername, case )?;
-				Some( format!( "{} {}", polite, name ) )
+				let polite = self.gender
+					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
+					.polite()
+					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+				let name = self.designate( NameCombo::Supername, case, locale )?;
+				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::RankSupername => {
-				let rank = self.rank.as_ref()?;
-				let name = self.designate( NameCombo::Supername, case )?;
-				Some( format!( "{} {}", rank, name ) )
+				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
+				let name = self.designate( NameCombo::Supername, case, locale )?;
+				Ok( format!( "{} {}", rank, name ) )
 			},
 		}
 	}
@@ -761,13 +848,14 @@ impl Names {
 	/// * `case` The grammatical case the name will be transformed into.
 	pub fn moniker(
 		&self,
-		case: GrammaticalCase
-	) -> Option<String> {
-		self.designate( NameCombo::Fullname, case )
-			.or( self.designate( NameCombo::Firstname, case )
-				.or( self.designate( NameCombo::Surname, case )
-					.or( self.designate( NameCombo::Nickname, case )
-						.or( self.designate( NameCombo::Supername, case ) )
+		case: GrammaticalCase,
+		locale: &LanguageIdentifier
+	) -> Result<String, NameError> {
+		self.designate( NameCombo::Fullname, case, locale )
+			.or( self.designate( NameCombo::Firstname, case, locale )
+				.or( self.designate( NameCombo::Surname, case, locale )
+					.or( self.designate( NameCombo::Nickname, case, locale )
+						.or( self.designate( NameCombo::Supername, case, locale ) )
 					)
 				)
 			)
@@ -789,6 +877,80 @@ mod tests {
 	fn grammatical_case_from_str() {
 		assert_eq!( GrammaticalCase::from_str( "nominative" ).unwrap(), GrammaticalCase::Nominative );
 		assert_eq!( GrammaticalCase::from_str( "Dative" ).unwrap(), GrammaticalCase::Dative );
+	}
+
+	#[test]
+	fn test_add_case_letter() {
+		use unic_langid::LanguageIdentifier;
+		use unic_langid::langid;
+
+		const US_ENGLISH: LanguageIdentifier = langid!( "en-US" );
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
+		assert_eq!(
+			add_case_letter( "Gunther", GrammaticalCase::Nominative, &US_ENGLISH ).unwrap(),
+			"Gunther"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Nominative, &US_ENGLISH ).unwrap(),
+			"Aristoteles"
+		);
+		assert_eq!(
+			add_case_letter( "Günther", GrammaticalCase::Nominative, &GERMAN ).unwrap(),
+			"Günther"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Nominative, &GERMAN ).unwrap(),
+			"Aristoteles"
+		);
+		assert_eq!(
+			add_case_letter( "Gunther", GrammaticalCase::Genetive, &US_ENGLISH ).unwrap(),
+			"Gunther's"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Genetive, &US_ENGLISH ).unwrap(),
+			"Aristoteles'"
+		);
+		assert_eq!(
+			add_case_letter( "Günther", GrammaticalCase::Genetive, &GERMAN ).unwrap(),
+			"Günthers"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Genetive, &GERMAN ).unwrap(),
+			"Aristoteles'"
+		);
+		assert_eq!(
+			add_case_letter( "Gunther", GrammaticalCase::Dative, &US_ENGLISH ).unwrap(),
+			"Gunther"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Dative, &US_ENGLISH ).unwrap(),
+			"Aristoteles"
+		);
+		assert_eq!(
+			add_case_letter( "Günther", GrammaticalCase::Dative, &GERMAN ).unwrap(),
+			"Günther"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Dative, &GERMAN ).unwrap(),
+			"Aristoteles"
+		);
+		assert_eq!(
+			add_case_letter( "Gunther", GrammaticalCase::Accusative, &US_ENGLISH ).unwrap(),
+			"Gunther"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Accusative, &US_ENGLISH ).unwrap(),
+			"Aristoteles"
+		);
+		assert_eq!(
+			add_case_letter( "Günther", GrammaticalCase::Accusative, &GERMAN ).unwrap(),
+			"Günther"
+		);
+		assert_eq!(
+			add_case_letter( "Aristoteles", GrammaticalCase::Accusative, &GERMAN ).unwrap(),
+			"Aristoteles"
+		);
 	}
 
 	#[test]
@@ -894,6 +1056,10 @@ mod tests {
 
 	#[test]
 	fn name_strings_male() {
+		use unic_langid::langid;
+
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
 		// Thomas Jakob von Würzinger
 		let name = Names {
 			forenames: [ "Thomas", "Jakob" ].iter().map( |x| x.to_string() ).collect(),
@@ -909,115 +1075,119 @@ mod tests {
 		};
 
 		assert_eq!(
-			name.designate( NameCombo::Name, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Name, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas von Würzinger".to_string()
 		);
 		assert_eq!(
-			name.designate( NameCombo::Name, GrammaticalCase::Genetive ).unwrap(),
+			name.designate( NameCombo::Name, GrammaticalCase::Genetive, &GERMAN ).unwrap(),
 			"Thomas von Würzingers".to_string()
 		);
 		assert_eq!(
-			name.designate( NameCombo::Name, GrammaticalCase::Accusative ).unwrap(),
+			name.designate( NameCombo::Name, GrammaticalCase::Accusative, &GERMAN ).unwrap(),
 			"Thomas von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Surname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Surname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Firstname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Firstname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas".to_string()
 		);
 		assert_eq!(
-			name.designate( NameCombo::Firstname, GrammaticalCase::Genetive ).unwrap(),
+			name.designate( NameCombo::Firstname, GrammaticalCase::Genetive, &GERMAN ).unwrap(),
 			"Thomas'".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Forenames, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Forenames, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas Jakob".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Fullname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Fullname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas Jakob von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Title, GrammaticalCase::Nominative ),
-			None
+			name.designate( NameCombo::Title, GrammaticalCase::Nominative, &GERMAN ),
+			Err( NameError::MissingNameElement( "title".to_string() ) )
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Polite, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Polite, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Herr".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Herr Thomas von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteFirstname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteFirstname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Herr Thomas".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteSurname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteSurname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Herr von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Herr Thomas Jakob von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Nickname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Nickname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzi".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::FirstNickname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::FirstNickname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas Würzi".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::NickSurname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::NickSurname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzi von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Supername, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Supername, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzt-das-Essen".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::FirstSupername, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::FirstSupername, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas Würzt-das-Essen".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::SuperName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::SuperName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Thomas Würzt-das-Essen von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteSupername, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteSupername, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Herr Würzt-das-Essen".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::RankSupername, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::RankSupername, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Hauptkommissar Würzt-das-Essen".to_string()
 		);
 	}
 
 	#[test]
 	fn name_strings_female() {
+		use unic_langid::langid;
+
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
 		// Penelope Karin von Würzinger geb. Stauff
 		let name = Names {
 			forenames: [ "Penelope", "Karin" ].iter().map( |x| x.to_string() ).collect(),
@@ -1033,171 +1203,175 @@ mod tests {
 		};
 
 		assert_eq!(
-			name.designate( NameCombo::Name, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Name, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope von Würzinger".to_string()
 		);
 		assert_eq!(
-			name.designate( NameCombo::Name, GrammaticalCase::Genetive ).unwrap(),
+			name.designate( NameCombo::Name, GrammaticalCase::Genetive, &GERMAN ).unwrap(),
 			"Penelope von Würzingers".to_string()
 		);
 		assert_eq!(
-			name.designate( NameCombo::Name, GrammaticalCase::Accusative ).unwrap(),
+			name.designate( NameCombo::Name, GrammaticalCase::Accusative, &GERMAN ).unwrap(),
 			"Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Surname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Surname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Firstname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Firstname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Fullname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Fullname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope Karin von Würzinger geb. Stauff".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Title, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Title, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr.".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::TitleName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::TitleName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr. Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::TitleFirstname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::TitleFirstname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr. Penelope".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::TitleSurname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::TitleSurname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr. von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::TitleFullname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::TitleFullname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr. Penelope Karin von Würzinger geb. Stauff".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Polite, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Polite, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteFirstname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteFirstname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau Penelope".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteSurname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteSurname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteFullname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau Penelope Karin von Würzinger geb. Stauff".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteTitleName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteTitleName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau Dr. Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Rank, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Rank, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Majorin".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::PoliteRank, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::PoliteRank, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Frau Majorin".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::RankName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::RankName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Majorin Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::RankFirstname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::RankFirstname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Majorin Penelope".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::RankSurname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::RankSurname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Majorin von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::RankFullname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::RankFullname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Majorin Penelope Karin von Würzinger geb. Stauff".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::RankTitleName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::RankTitleName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Majorin Dr. Penelope von Würzinger".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Honor, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Honor, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Große".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Honortitle, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Honortitle, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Die Große".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::FirstHonorname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::FirstHonorname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope die Große".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::OrderedName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::OrderedName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzinger, Penelope von".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::OrderedSurname, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::OrderedSurname, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzinger, von".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::OrderedTitleName, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::OrderedTitleName, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzinger, Dr. Penelope von".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Initials, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Initials, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"P. v. W.".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::InitialsFull, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::InitialsFull, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr. P. K. v. W.".to_string()
 		);
 
 		assert_eq!(
-			name.designate( NameCombo::Sign, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::Sign, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Dr. P. K. v. Würzinger".to_string()
 		);
 	}
 
 	#[test]
 	fn name_strings_roman_male() {
+		use unic_langid::langid;
+
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
 		// Gaius Julius Caesar
 		let name = Names {
 			forenames: vec![ "Gaius".to_string() ],
@@ -1213,13 +1387,17 @@ mod tests {
 		};
 
 		assert_eq!(
-			name.designate( NameCombo::TriaNomina, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::TriaNomina, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Gaius Julius Caesar".to_string()
 		);
 	}
 
 	#[test]
 	fn name_strings_roman_female() {
+		use unic_langid::langid;
+
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
 		// Iunia Prima
 		let name = Names {
 			forenames: Vec::new(),
@@ -1235,25 +1413,29 @@ mod tests {
 		};
 
 		assert_eq!(
-			name.designate( NameCombo::DuaNomina, GrammaticalCase::Nominative ).unwrap(),
+			name.designate( NameCombo::DuaNomina, GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Iunia Prima".to_string()
 		);
 	}
 
 	#[test]
 	fn name_moniker() {
-		assert_eq!( Names::new().moniker( GrammaticalCase::Nominative ), None );
+		use unic_langid::langid;
+
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
+		assert_eq!( Names::new().moniker( GrammaticalCase::Nominative, &GERMAN ), Err( NameError::MissingNameElement( "supername".to_string() ) ) );
 		assert_eq!(
 			Names::new()
 				.with_forenames( &[ "Penelope", "Karin" ] )
-				.moniker( GrammaticalCase::Nominative ).unwrap(),
+				.moniker( GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope".to_string()
 		);
 		assert_eq!(
 			Names::new()
 				.with_forenames( &[ "Penelope", "Karin" ] )
 				.with_surname( "Würzinger" )
-				.moniker( GrammaticalCase::Nominative ).unwrap(),
+				.moniker( GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope Karin Würzinger".to_string()
 		);
 		assert_eq!(
@@ -1261,20 +1443,20 @@ mod tests {
 				.with_forenames( &[ "Penelope", "Karin" ] )
 				.with_predicate( "von" )
 				.with_surname( "Würzinger" )
-				.moniker( GrammaticalCase::Nominative ).unwrap(),
+				.moniker( GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Penelope Karin von Würzinger".to_string()
 		);
 		assert_eq!(
 			Names::new()
 				.with_nickname( "Würzli" )
-				.moniker( GrammaticalCase::Nominative ).unwrap(),
+				.moniker( GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzli".to_string()
 		);
 		assert_eq!(
 			Names::new()
 				.with_nickname( "Würzli" )
 				.with_surname( "Würzinger" )
-				.moniker( GrammaticalCase::Nominative ).unwrap(),
+				.moniker( GrammaticalCase::Nominative, &GERMAN ).unwrap(),
 			"Würzinger".to_string()
 		);
 	}

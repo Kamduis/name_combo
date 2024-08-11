@@ -17,3 +17,7 @@ serde = ["dep:serde"]
 log = "0.4.20"
 serde = { version = "1.0.195", features = ["derive"], optional = true }
 thiserror = "1.0.57"
+unic-langid = "0.9.5"
+
+[dev-dependencies]
+unic-langid = { version = "0.9.5", features = ["macros"] }
