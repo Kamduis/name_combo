@@ -44,6 +44,9 @@ pub enum NameError {
 	#[error( "Name element missing: `{0}`" )]
 	MissingNameElement( String ),
 
+	#[error( "Name cannot be expressed: `{0}`" )]
+	NotExpressionable( String ),
+
 	#[error( "Language not yet supported: `{0}`" )]
 	LangNotSupported( String ),
 }
@@ -153,13 +156,33 @@ pub enum Gender {
 }
 
 impl Gender {
-	/// Returns the german polite adress for a person of the respective gender.
-	fn polite( &self ) -> Option<String> {
-		match self {
-			Self::Male    => Some( "Herr".to_string() ),
-			Self::Female  => Some( "Frau".to_string() ),
-			Self::Neutral | Self::Other => None,
-		}
+	/// Returns the German polite address for a person of the respective gender. If the gender has no respective address, this method returns `None`.
+	///
+	/// # Error
+	/// If the `lacle` is not supported, this method returns an error.
+	///
+	/// # Arguments
+	/// * `locale` the locale to use. Currently only English and German are supported.
+	fn polite( &self, locale: &LanguageIdentifier ) -> Result<String, NameError> {
+		let res = match locale.language.as_str() {
+			"en" => match self {
+				Self::Male    => "Mister",
+				Self::Female  => "Miss",
+				Self::Neutral | Self::Other => return Err( NameError::NotExpressionable(
+					format!( "Gender has no polite address: {}", self )
+				) ),
+			}
+			"de" => match self {
+				Self::Male    => "Herr",
+				Self::Female  => "Frau",
+				Self::Neutral | Self::Other => return Err( NameError::NotExpressionable(
+					format!( "Gender has no polite address: {}", self )
+				) ),
+			}
+			_ => return Err( NameError::LangNotSupported( locale.to_string() ) ),
+		};
+
+		Ok( res.to_string() )
 	}
 
 	/// Returns the symbol representing the gender of `self`.
@@ -605,44 +628,38 @@ impl Names {
 			},
 			NameCombo::Polite => self.gender
 				.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-				.polite()
-				.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) ),
+				.polite( locale ),
 			NameCombo::PoliteName => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				let name = self.designate( NameCombo::Name, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteFirstname => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				let name = self.designate( NameCombo::Firstname, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteSurname => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				Ok( format!( "{} {}", polite, self.designate( NameCombo::Surname, case, locale ).unwrap() ) )
 			},
 			NameCombo::PoliteFullname => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				let name = self.designate( NameCombo::Fullname, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteTitleName => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				let title = self.title.as_ref()
 					.ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
 				let name = self.designate( NameCombo::Name, case, locale )?;
@@ -658,8 +675,7 @@ impl Names {
 			NameCombo::PoliteRank => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
 				Ok( format!( "{} {}", polite, rank ) )
 			},
@@ -821,8 +837,7 @@ impl Names {
 			NameCombo::PoliteSupername => {
 				let polite = self.gender
 					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-					.polite()
-					.ok_or( NameError::MissingNameElement( "gender-polite".to_string() ) )?;
+					.polite( locale )?;
 				let name = self.designate( NameCombo::Supername, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
@@ -955,10 +970,17 @@ mod tests {
 
 	#[test]
 	fn gender_title() {
-		assert_eq!( Gender::Male.polite().unwrap(), "Herr".to_string() );
-		assert_eq!( Gender::Female.polite().unwrap(), "Frau".to_string() );
-		assert!( Gender::Neutral.polite().is_none() );
-		assert!( Gender::Other.polite().is_none() );
+		use unic_langid::langid;
+
+		const US_ENGLISH: LanguageIdentifier = langid!( "en-US" );
+		const GERMAN: LanguageIdentifier = langid!( "de-DE" );
+
+		assert_eq!( Gender::Male.polite( &US_ENGLISH ).unwrap(), "Mister".to_string() );
+		assert_eq!( Gender::Female.polite( &US_ENGLISH ).unwrap(), "Miss".to_string() );
+		assert_eq!( Gender::Male.polite( &GERMAN ).unwrap(), "Herr".to_string() );
+		assert_eq!( Gender::Female.polite( &GERMAN ).unwrap(), "Frau".to_string() );
+		assert!( Gender::Neutral.polite( &GERMAN ).is_err() );
+		assert!( Gender::Other.polite( &GERMAN ).is_err() );
 	}
 
 	#[test]
