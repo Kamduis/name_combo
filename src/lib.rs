@@ -201,10 +201,10 @@ impl Gender {
 impl fmt::Display for Gender {
 	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
 		let res = match self {
-			Self::Male    => "männlich",
-			Self::Female  => "weiblich",
+			Self::Male    => "male",
+			Self::Female  => "female",
 			Self::Neutral => "neutral",
-			Self::Other   => "anders",
+			Self::Other   => "other",
 		};
 
 		write!( f, "{}", res )
@@ -993,10 +993,10 @@ mod tests {
 
 	#[test]
 	fn gender_text() {
-		assert_eq!( Gender::Male.to_string(), "männlich".to_string() );
-		assert_eq!( Gender::Female.to_string(), "weiblich".to_string() );
+		assert_eq!( Gender::Male.to_string(), "male".to_string() );
+		assert_eq!( Gender::Female.to_string(), "female".to_string() );
 		assert_eq!( Gender::Neutral.to_string(), "neutral".to_string() );
-		assert_eq!( Gender::Other.to_string(), "anders".to_string() );
+		assert_eq!( Gender::Other.to_string(), "other".to_string() );
 	}
 
 	#[test]
