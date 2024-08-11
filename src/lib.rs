@@ -20,11 +20,11 @@ use std::hash::Hash;
 use std::fmt;
 use std::str::FromStr;
 
+#[cfg( feature = "i18n" )] use fluent_templates::Loader;
 #[allow( unused )] use log::{error, warn, info, debug};
 #[cfg( feature = "serde" )] use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
-
 
 
 
@@ -49,6 +49,45 @@ pub enum NameError {
 
 	#[error( "Language not yet supported: `{0}`" )]
 	LangNotSupported( String ),
+}
+
+
+
+
+//=============================================================================
+// Traits
+
+
+/// Providing a localized `.to_string()`: `.to_string_locale()`.
+///
+/// This Trait is only available, if the **`i18n`** feature has been enabled.
+#[cfg( feature = "i18n" )]
+pub trait DisplayLocale: fmt::Display {
+	/// Returns the localized string representation of `self`.
+	///
+	/// The standard implementation ignores `locale` and returns the same string as `.to_string()`.
+	#[allow( unused_variables )]
+	fn to_string_locale( &self, locale: &LanguageIdentifier ) -> String {
+		self.to_string()
+	}
+}
+
+
+
+
+//=============================================================================
+// Internationalization
+
+
+#[cfg( feature = "i18n" )]
+fluent_templates::static_loader! {
+	static LOCALES = {
+		// The directory of localisations and fluent resources.
+		locales: "./locales",
+
+		// The language to falback on if something is not present.
+		fallback_language: "en-US",
+	};
 }
 
 
@@ -208,6 +247,18 @@ impl fmt::Display for Gender {
 		};
 
 		write!( f, "{}", res )
+	}
+}
+
+#[cfg( feature = "i18n" )]
+impl DisplayLocale for Gender {
+	fn to_string_locale( &self, locale: &LanguageIdentifier ) -> String {
+		match self {
+			Self::Male    => LOCALES.lookup( locale, "male" ),
+			Self::Female  => LOCALES.lookup( locale, "female" ),
+			Self::Neutral => LOCALES.lookup( locale, "neutral" ),
+			Self::Other   => LOCALES.lookup( locale, "other" ),
+		}
 	}
 }
 
