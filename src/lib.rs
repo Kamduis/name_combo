@@ -17,9 +17,9 @@
 // Crates
 
 
-use std::fmt;
+#[cfg( feature = "i18n" )] use std::fmt;
 
-use unic_langid::LanguageIdentifier;
+#[cfg( feature = "i18n" )] use unic_langid::LanguageIdentifier;
 
 mod gender;
 pub use crate::gender::Gender;

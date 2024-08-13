@@ -15,8 +15,8 @@ use std::fmt;
 #[cfg( feature = "serde" )] use serde::{Serialize, Deserialize};
 use unic_langid::LanguageIdentifier;
 
-use crate::DisplayLocale;
-use crate::LOCALES;
+#[cfg( feature = "i18n" )] use crate::DisplayLocale;
+#[cfg( feature = "i18n" )] use crate::LOCALES;
 use crate::name::NameError;
 
 
