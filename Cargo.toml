@@ -1,14 +1,25 @@
 [package]
 name = "name_combo"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Victor von Rhein"]
+description = "Representation of names."
+readme = "README.md"
+repository = "https://github.com/Kamduis/name_combo"
+license = "MIT OR Apache-2.0"
+keywords = ["name", "moniker"]
+categories = ["value-formatting"]
 
 [features]
+i18n = ["dep:fluent-templates"]
 serde = ["dep:serde"]
 
 [dependencies]
+fluent-templates = { version = "0.9.4", optional = true }
 log = "0.4.20"
 serde = { version = "1.0.195", features = ["derive"], optional = true }
 thiserror = "1.0.57"
+unic-langid = "0.9.5"
+
+[dev-dependencies]
+unic-langid = { version = "0.9.5", features = ["macros"] }
