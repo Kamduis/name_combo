@@ -21,6 +21,7 @@ name_combo = "x.y.z"
 
 ## Optional Features
 
+* **i18n:** Enables internationalization support. See [`DisplayLocale`][]
 * **serde:** Enables [`serde`][] support.
 
 
@@ -38,6 +39,7 @@ Licensed under either of
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 
+[`DisplayLocale`]: https://docs.rs/name_combo/latest/name_combo/trait.DisplayLocale
 [`serde`]: https://docs.rs/serde/latest/serde/
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT
