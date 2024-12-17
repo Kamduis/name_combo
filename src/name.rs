@@ -433,8 +433,13 @@ impl Names {
 	}
 
 	/// Return the `Gender`.
-	pub fn gender( &self ) -> &Option<Gender> {
-		&self.gender
+	pub fn gender( &self ) -> Option<Gender> {
+		self.gender
+	}
+
+	/// Return a mutable reference to the `Gender`, if one exists.
+	pub fn gender_mut( &mut self ) -> &mut Option<Gender> {
+		&mut self.gender
 	}
 
 	/// Returns all forenames.
@@ -967,6 +972,22 @@ mod tests {
 				..Default::default()
 			}
 		);
+	}
+
+	#[test]
+	fn modify_names() {
+		let mut names = Names::new();
+
+		assert_eq!( names.gender(), None );
+		*names.gender_mut() = Some( Gender::Male );
+		assert_eq!( names.gender(), Some( Gender::Male ) );
+
+		if let Some( gender ) = names.gender_mut() {
+			*gender = Gender::Female;
+		} else {
+			panic!( "Test failed!" );
+		};
+		assert_eq!( names.gender(), Some( Gender::Female ) );
 	}
 
 	#[test]
