@@ -363,7 +363,7 @@ pub struct Names {
 	supername: Option<String>,
 
 	#[cfg_attr( feature = "serde", serde( default ) )]
-	gender: Option<Gender>,
+	gender: Gender,
 }
 
 impl Names {
@@ -427,18 +427,18 @@ impl Names {
 	}
 
 	/// Set the gender.
-	pub fn with_gender( mut self, gender: &Gender ) -> Self {
-		self.gender = Some( *gender );
+	pub fn with_gender( mut self, gender: Gender ) -> Self {
+		self.gender = gender;
 		self
 	}
 
 	/// Return the `Gender`.
-	pub fn gender( &self ) -> Option<Gender> {
+	pub fn gender( &self ) -> Gender {
 		self.gender
 	}
 
 	/// Return a mutable reference to the `Gender`, if one exists.
-	pub fn gender_mut( &mut self ) -> &mut Option<Gender> {
+	pub fn gender_mut( &mut self ) -> &mut Gender {
 		&mut self.gender
 	}
 
@@ -555,39 +555,32 @@ impl Names {
 				let name = self.designate( NameCombo::Fullname, case, locale )?;
 				Ok( format!( "{} {}", title, name ) )
 			},
-			NameCombo::Polite => self.gender
-				.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
-				.polite( locale ),
+			NameCombo::Polite => self.gender.polite( locale ),
 			NameCombo::PoliteName => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				let name = self.designate( NameCombo::Name, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteFirstname => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				let name = self.designate( NameCombo::Firstname, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteSurname => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				Ok( format!( "{} {}", polite, self.designate( NameCombo::Surname, case, locale ).unwrap() ) )
 			},
 			NameCombo::PoliteFullname => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				let name = self.designate( NameCombo::Fullname, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
 			},
 			NameCombo::PoliteTitleName => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				let title = self.title.as_ref()
 					.ok_or( NameError::MissingNameElement( "title".to_string() ) )?;
@@ -603,7 +596,6 @@ impl Names {
 			},
 			NameCombo::PoliteRank => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				let rank = self.rank.as_ref().ok_or( NameError::MissingNameElement( "rank".to_string() ) )?;
 				Ok( format!( "{} {}", polite, rank ) )
@@ -661,9 +653,9 @@ impl Names {
 			NameCombo::Honortitle => {
 				let honor = self.designate( NameCombo::Honor, case, locale )?;
 				let res = match self.gender {
-					Some( Gender::Female ) => format!( "Die {}", honor ),
-					Some( Gender::Male ) => format!( "Der {}", honor ),
-					Some( Gender::Neutral ) => format!( "Das {}", honor ),
+					Gender::Female => format!( "Die {}", honor ),
+					Gender::Male => format!( "Der {}", honor ),
+					Gender::Neutral => format!( "Das {}", honor ),
 					_ => honor.to_string(),
 				};
 				Ok( res )
@@ -672,9 +664,9 @@ impl Names {
 				let name = self.designate( NameCombo::Firstname, case, locale )?;
 				let honor = self.designate( NameCombo::Honor, case, locale )?;
 				let res = match self.gender {
-					Some( Gender::Female ) => format!( "{} die {}", name, honor ),
-					Some( Gender::Male ) => format!( "{} der {}", name, honor ),
-					Some( Gender::Neutral ) => format!( "{} das {}", name, honor ),
+					Gender::Female => format!( "{} die {}", name, honor ),
+					Gender::Male => format!( "{} der {}", name, honor ),
+					Gender::Neutral => format!( "{} das {}", name, honor ),
 					_ => format!( "{} {}", name, honor ),
 				};
 				Ok( res )
@@ -765,7 +757,6 @@ impl Names {
 			},
 			NameCombo::PoliteSupername => {
 				let polite = self.gender
-					.ok_or( NameError::MissingNameElement( "gender".to_string() ) )?
 					.polite( locale )?;
 				let name = self.designate( NameCombo::Supername, case, locale )?;
 				Ok( format!( "{} {}", polite, name ) )
@@ -967,8 +958,8 @@ mod tests {
 			}
 		);
 		assert_eq!( Names::new()
-			.with_gender( &Gender::Female ), Names {
-				gender: Some( Gender::Female ),
+			.with_gender( Gender::Female ), Names {
+				gender: Gender::Female,
 				..Default::default()
 			}
 		);
@@ -978,16 +969,9 @@ mod tests {
 	fn modify_names() {
 		let mut names = Names::new();
 
-		assert_eq!( names.gender(), None );
-		*names.gender_mut() = Some( Gender::Male );
-		assert_eq!( names.gender(), Some( Gender::Male ) );
-
-		if let Some( gender ) = names.gender_mut() {
-			*gender = Gender::Female;
-		} else {
-			panic!( "Test failed!" );
-		};
-		assert_eq!( names.gender(), Some( Gender::Female ) );
+		assert_eq!( names.gender(), Gender::Undefined );
+		*names.gender_mut() = Gender::Male;
+		assert_eq!( names.gender(), Gender::Male );
 	}
 
 	#[test]
@@ -1007,7 +991,7 @@ mod tests {
 			nickname: Some( "Würzi".to_string() ),
 			honorname: Some( "Dunkle".to_string() ),
 			supername: Some( "Würzt-das-Essen".to_string() ),
-			gender: Some( Gender::Male ),
+			gender: Gender::Male,
 		};
 
 		assert_eq!(
@@ -1135,7 +1119,7 @@ mod tests {
 			nickname: None,
 			honorname: Some( "Große".to_string() ),
 			supername: None,
-			gender: Some( Gender::Female ),
+			gender: Gender::Female,
 		};
 
 		assert_eq!(
@@ -1319,7 +1303,7 @@ mod tests {
 			nickname: Some( "Caesar".to_string() ),
 			honorname: None,
 			supername: None,
-			gender: None,
+			gender: Gender::Undefined,
 		};
 
 		assert_eq!(
@@ -1345,7 +1329,7 @@ mod tests {
 			nickname: Some( "Prima".to_string() ),
 			honorname: None,
 			supername: None,
-			gender: None,
+			gender: Gender::Undefined,
 		};
 
 		assert_eq!(

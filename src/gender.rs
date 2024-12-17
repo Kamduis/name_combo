@@ -28,8 +28,10 @@ use crate::name::NameError;
 
 /// A subset of possible genders.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Clone, Copy, Hash, PartialEq, Eq, Debug )]
+#[derive( Clone, Copy, Hash, PartialEq, Eq, Default, Debug )]
 pub enum Gender {
+	#[default]
+	Undefined,
 	Male,
 	Female,
 	Neutral,
@@ -38,7 +40,8 @@ pub enum Gender {
 
 impl Gender {
 	/// Returns a slice of all available `Gender`s.
-	pub const ALL: &[ Gender; 4 ] = &[
+	pub const ALL: &[ Gender; 5 ] = &[
+		Self::Undefined,
 		Self::Male,
 		Self::Female,
 		Self::Neutral,
@@ -48,7 +51,7 @@ impl Gender {
 	/// Returns the German polite address for a person of the respective gender. If the gender has no respective address, this method returns `None`.
 	///
 	/// # Error
-	/// If the `lacle` is not supported, this method returns an error.
+	/// If the `locale` is not supported, this method returns an error.
 	///
 	/// # Arguments
 	/// * `locale` the locale to use. Currently only English and German are supported.
@@ -57,14 +60,14 @@ impl Gender {
 			"en" => match self {
 				Self::Male    => "Mister",
 				Self::Female  => "Miss",
-				Self::Neutral | Self::Other => return Err( NameError::NotExpressionable(
+				Self::Undefined | Self::Neutral | Self::Other => return Err( NameError::NotExpressionable(
 					format!( "Gender has no polite address: {}", self )
 				) ),
 			}
 			"de" => match self {
 				Self::Male    => "Herr",
 				Self::Female  => "Frau",
-				Self::Neutral | Self::Other => return Err( NameError::NotExpressionable(
+				Self::Undefined | Self::Neutral | Self::Other => return Err( NameError::NotExpressionable(
 					format!( "Gender has no polite address: {}", self )
 				) ),
 			}
@@ -79,7 +82,7 @@ impl Gender {
 		let res = match self {
 			Self::Male    => "♂",
 			Self::Female  => "♀",
-			Self::Neutral => "⚪",
+			Self::Undefined | Self::Neutral => "⚪",
 			Self::Other   => "⚧",
 		};
 
@@ -90,6 +93,7 @@ impl Gender {
 impl fmt::Display for Gender {
 	fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
 		let res = match self {
+			Self::Undefined => "undefined",
 			Self::Male    => "male",
 			Self::Female  => "female",
 			Self::Neutral => "neutral",
@@ -104,6 +108,7 @@ impl fmt::Display for Gender {
 impl DisplayLocale for Gender {
 	fn to_string_locale( &self, locale: &LanguageIdentifier ) -> String {
 		match self {
+			Self::Undefined => LOCALES.lookup( locale, "undefined" ),
 			Self::Male    => LOCALES.lookup( locale, "male" ),
 			Self::Female  => LOCALES.lookup( locale, "female" ),
 			Self::Neutral => LOCALES.lookup( locale, "neutral" ),
