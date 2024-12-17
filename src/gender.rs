@@ -37,6 +37,14 @@ pub enum Gender {
 }
 
 impl Gender {
+	/// Returns a slice of all available `Gender`s.
+	pub const ALL: &[ Gender; 4 ] = &[
+		Self::Male,
+		Self::Female,
+		Self::Neutral,
+		Self::Other,
+	];
+
 	/// Returns the German polite address for a person of the respective gender. If the gender has no respective address, this method returns `None`.
 	///
 	/// # Error
@@ -114,6 +122,11 @@ impl DisplayLocale for Gender {
 #[cfg( test )]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn gender_all() {
+		assert!( Gender::ALL.iter().count() > 0 );
+	}
 
 	#[test]
 	fn gender_title() {
